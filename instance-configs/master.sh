@@ -25,8 +25,7 @@ mkdir /home/cluster/.ssh
 ssh-keygen -t rsa -N "" -f /home/cluster/.ssh/id_rsa
 cat /home/cluster/.ssh/id_rsa.pub >> /home/cluster/.ssh/authorized_keys
 
-# Allow for first-login without confirming host (TODO: RStudio confirms host
-# key checking)
+# Allow for first-login without confirming host
 echo 'Host *
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null' >> /home/cluster/.ssh/config
@@ -42,11 +41,12 @@ chmod 644 /home/cluster/.ssh/authorized_keys
 # Download/install RStudio
 wget https://download2.rstudio.org/rstudio-server-0.99.486-amd64.deb
 gdebi -n rstudio-server-0.99.486-amd64.deb
+rm rstudio-server-0.99.486-amd64.deb
 
 
 # ==========
 # Install NFS, mount `cluster` user home folder for sharing
 apt-get -y install nfs-kernel-server
-echo "ALL: 10.10." >> /etc/hosts.allow
+echo "ALL: 172." >> /etc/hosts.allow
 echo "/home/cluster *(rw,sync,no_root_squash)" >> /etc/exports
 service nfs-kernel-server restart

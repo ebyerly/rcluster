@@ -5,7 +5,7 @@ from copy import deepcopy
 from inspect import getargspec
 from pprint import PrettyPrinter
 
-from boto3 import session
+from boto3 import session, client
 import paramiko
 
 
@@ -15,7 +15,7 @@ class RCluster:
     Designed to organize the information for a boto3 connection to EC2, paramiko
     connections using a consistent SSH key, creation of EC2 instances using a
     consistent key, the creation and tracking of master and worker nodes
-    comprising an R PSOCK cluster, and the networking those master and worker
+    comprising an R PSOCK cluster, and networking those master and worker
     nodes to access within an RStudio Server session.
     '''
     def __init__(self, aws_access_key_id, aws_secret_access_key, region_name,
@@ -88,10 +88,10 @@ class RCluster:
             attempting configuration steps (default 60)
         '''
         print('Creating cluster of', n_workers, 'workers')
-        master = self.createInstances(self.master_conf['ami'], 1,
-                                      self.master_conf['type'])[0]
-        workers = self.createInstances(self.worker_conf['ami'], n_workers,
-                                       self.worker_conf['type'])
+        instances = self.createInstances(self.master_conf['ami'], n_workers + 1,
+                                         self.master_conf['type'])
+        master = instances[0]
+        workers = instances[1:]
         sleep(setup_pause)
         self.master_private = getattr(master, 'private_ip_address')
         self.access_ip = getattr(master,
@@ -101,17 +101,15 @@ class RCluster:
             for worker in workers:
                 print('Configuring Worker', worker.instance_id)
                 client = self.pmkConnect(worker)
-                cpus = pmkCmd(client,
-                              r'cat /proc/cpuinfo | grep processor | wc -l')
-                cpus = int(cpus[0][:-1]) # original format: ['2\n']
+                cpus = cpuCount(client)
                 self.hostfile += (worker.private_ip_address + '\n') * cpus
                 if self.worker_conf['runtime']:
                     pmkCmd(client,
                            self.worker_conf['runtime'].format(**self.__dict__))
             print('Configuring Master', master.instance_id)
             client = self.pmkConnect(master)
-            pmkCmd(client, (r'echo "{hostfile}" | sudo tee --append /home' +\
-                            r'/{sudo_user}/hostfile').format(**self.__dict__))
+            cpus = cpuCount(client) - 1
+            self.hostfile += (master.private_ip_address + '\n') * cpus
             if self.master_conf['runtime']:
                 pmkCmd(client,
                        self.master_conf['runtime'].format(**self.__dict__))
@@ -164,6 +162,8 @@ class RCluster:
             MaxCount = n_instances,
             InstanceType = instance_type,
             KeyName = self.key_name,
+            # SecurityGroupIds = ['string'],
+            # Placement={'GroupName': 'string'}
             **self.instance_config
         )
         instances[0].wait_until_running()
@@ -223,6 +223,11 @@ class RCluster:
                 dic[key] = input(key + ': ')
         return RCluster(**dic)
 
+def cpuCount(client):
+    cpus = pmkCmd(client,
+                  r'cat /proc/cpuinfo | grep processor | wc -l')
+    cpus = int(cpus[0][:-1]) # original format: ['2\n']
+    return cpus
 
 def pmkCmd(client, call):
     '''Issue command over SSH, treat execution failure as program failure.
