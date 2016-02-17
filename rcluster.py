@@ -5,7 +5,7 @@ from copy import deepcopy
 from inspect import getargspec
 from pprint import PrettyPrinter
 
-from boto3 import session, client
+from boto3 import session
 import paramiko
 
 
@@ -19,8 +19,8 @@ class RCluster:
     nodes to access within an RStudio Server session.
     '''
     def __init__(self, aws_access_key_id, aws_secret_access_key, region_name,
-                 key_path, master_conf, worker_conf, sudo_user = 'ubuntu', 
-                 ip_ref = 'public', instance_config = {}):
+                 key_path, instance_conf, master_conf, worker_conf,
+                 sudo_user = 'ubuntu', ip_ref = 'public', instance_config = {}):
         '''Initialize the RCluster object.
         
         Keyword arguments:
@@ -31,14 +31,15 @@ class RCluster:
             boto3.session.Session()
         key_path -- The path to the key used to create EC2 instances and to
             connect to them using paramiko clients
-        master_conf -- Dictionary defining {'ami':, 'runtime':, 'type':} for
-            the master instance (where 'ami' is the AMI ID for the master,
-            'runtime' is a shell command issued after the master instance has
-            finished booting, and type is the instance type used for the master)
-        worker_conf -- Dictionary defining {'ami':, 'runtime':, 'type':} for
-            the worker instance (where 'ami' is the AMI ID for the worker,
-            'runtime' is a shell command issued after the worker instance has
-            finished booting, and type is the instance type used for the worker)
+        instance_conf -- Dictionary defining {'ami':, 'type':} for instances
+            (where 'ami' is the AMI ID for the instances and type is the
+            instance type used)
+        master_conf -- Dictionary defining {'runtime':} for
+            the master instance (where 'runtime' is a shell command issued after
+            the master instance has finished booting)
+        worker_conf -- Dictionary defining {'runtime':} for
+            the worker instance (where 'runtime' is a shell command issued after
+            the worker instance has finished booting)
         sudo_user -- The sudo user for all instances (default 'ubuntu')
         ip_ref -- 'public'|'private', the IP used to access instances from your
             local session (default 'public')
@@ -88,8 +89,8 @@ class RCluster:
             attempting configuration steps (default 60)
         '''
         print('Creating cluster of', n_workers, 'workers')
-        instances = self.createInstances(self.master_conf['ami'], n_workers + 1,
-                                         self.master_conf['type'])
+        instances = self.createInstances(self.instance_conf['ami'], n_workers + 1,
+                                         self.instance_conf['type'])
         master = instances[0]
         workers = instances[1:]
         sleep(setup_pause)
@@ -162,8 +163,6 @@ class RCluster:
             MaxCount = n_instances,
             InstanceType = instance_type,
             KeyName = self.key_name,
-            # SecurityGroupIds = ['string'],
-            # Placement={'GroupName': 'string'}
             **self.instance_config
         )
         instances[0].wait_until_running()

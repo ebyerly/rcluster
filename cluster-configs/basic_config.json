@@ -2,16 +2,16 @@
   "aws_access_key_id": null,
   "aws_secret_access_key": null,
   "key_path": null,
-  "master_conf": {
+  "instance_conf": {
     "ami": null,
-    "runtime": "echo \"{hostfile}\" | sudo tee --append /home/cluster/hostfile",
     "type": "m4.large"
+  },
+  "master_conf": {
+    "runtime": "echo \"{hostfile}\" | sudo tee --append /home/cluster/hostfile"
   },
   "region_name": "us-east-1",
   "sudo_user": "ubuntu",
   "worker_conf": {
-    "ami": null,
-    "runtime": "sudo mount -t nfs {master_private}:/home/cluster /home/cluster",
-    "type": "m4.large"
+    "runtime": "sudo mount -t nfs {master_private}:/home/cluster /home/cluster"
   }
 }
