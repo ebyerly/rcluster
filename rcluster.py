@@ -251,12 +251,12 @@ if __name__ == '__main__':
                        help = 'the JSON referenced as the configuration' +\
                               'dictionary container.')
     parser.add_argument('-w', '--workers', type = int, nargs = 1,
-                       default = 1,
+                       default = [1],
                        help = 'the number of workers to launch')
     args = parser.parse_args()
     try:
         cluster = RCluster.fromConfig(args.config)
-        cluster.createCluster(args.workers)
+        cluster.createCluster(args.workers[0])
         print(cluster.access_ip, 'served by:\n', cluster.hostfile)
     except FileNotFoundError:
         print('Run "create_amis.py", first, to generate your own private config',
