@@ -4,7 +4,7 @@
 # Designed for Ubuntu 14.04, ami-655e1000
 
 # ==========
-# Add source for latest version of R, add needed key
+# Add source for latest version of R and required key
 echo "deb http://watson.nci.nih.gov/cran_mirror/bin/linux/ubuntu trusty/" >> \
 /etc/apt/sources.list
 apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 51716619E084DAB9
@@ -18,7 +18,8 @@ apt-get -y autoremove
 apt-get -y install openssh-server
 apt-get -y install nfs-kernel-server
 apt-get -y install r-base-dev
-apt-get -y install gdebi-core libapparmor1
+apt-get -y install gdebi-core
+apt-get -y install libapparmor1
 
 # Install R packages
 R -e 'install.packages(c("dplyr"), repo = "http://watson.nci.nih.gov/cran_mirror/")'
@@ -54,18 +55,18 @@ service nfs-kernel-server restart
 echo 'defaultCluster <- function(hostfile = "/home/cluster/hostfile") {
   hosts <- read.delim(hostfile, "\n", header = FALSE,
                       stringsAsFactors = FALSE)[,1]
-  master_ip <- gsub("-", ".",
+  manager_ip <- gsub("-", ".",
                     gsub("ip-", "", system("hostname", intern = TRUE)))
   parallel::makePSOCKcluster(hosts, rscript = "/usr/bin/Rscript",
                              user = "cluster", port = 42808,
-                             master = master_ip)
+                             manager = manager_ip)
 }
 ' >> /home/cluster/.Rprofile
 
 
 # ==========
 # SSH
-# Note, as the /home/cluster folder is shared across master and workers, they
+# Note, as the /home/cluster folder is shared across manager and workers, they
 # will all share the same /home/cluster/.ssh folder
 mkdir /home/cluster/.ssh
 ssh-keygen -t rsa -N "" -f /home/cluster/.ssh/id_rsa
