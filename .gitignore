@@ -1,3 +1,5 @@
+.idea/*
+dist/*
+build/*
+rcluster.egg-info/*
 *.pyc
-private/
-venv/

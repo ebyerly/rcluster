@@ -2,8 +2,8 @@
   "aws_access_key_id": null,
   "aws_secret_access_key": null,
   "instance_conf": {
-    "InstanceType": "m4.large",
-    "ImageId": "ami-655e1000"
+    "ImageId": "ami-0d729a60",
+    "InstanceType": "m4.large"
   },
   "region_name": "us-east-1",
   "manager_runtime":
