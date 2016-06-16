@@ -48,7 +48,7 @@ def pmkCmd(client, call):
     if exit_status:
         text = ''.join(stderr.readlines()).encode('utf-8')
         log.error(text)
-        raise text
+        raise Exception(text)
     return lines
 
 

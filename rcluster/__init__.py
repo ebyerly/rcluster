@@ -1,27 +1,29 @@
-__title__ = 'rcluster'
-__ver__ = '0.2.2'
+import os
+import logging
 
-from .rcluster import RCluster
-from .pmkutils import pmkGet, pmkPut, pmkWalk, pmkCmd, cpuCount, pmkConnect
+__title__ = 'rcluster'
+__ver__ = '0.2.3'
 
 # Add logging (defaults to null, but can be picked up by any logger)
-import logging
-from logging import NullHandler
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-logging.getLogger(__name__).addHandler(NullHandler())
-
-import os
-
-# Outputs will be saved to user's home directory in a hidden folder
+# Identify user's home directory, create hidden folder
 _OUTDIR = os.path.join(os.path.expanduser('~'), '.rcluster')
 os.makedirs(_OUTDIR, exist_ok=True)
-# Stable identification of installation directory
+
+# Identify location of rcluster installation
 _ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 def setData(ext):
+    """Return path to save to hidden .rcluster folder in user directory"""
     return os.path.join(_OUTDIR, __ver__ + '.' + ext)
 
 
 def getData(path):
+    """Inputs are sourced from the rcluster installation directory"""
     return os.path.join(_ROOT, 'data', path)
+
+
+from .rcluster import RCluster
+from .pmkutils import pmkGet, pmkPut, pmkWalk, pmkCmd, cpuCount, pmkConnect
