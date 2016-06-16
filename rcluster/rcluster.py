@@ -27,24 +27,27 @@ class RCluster:
                  key_path=None, ip_ref='public_ip_address', ver=rcl.__ver__,
                  purge=False):
         """Initialize the RCluster object.
-        Keyword arguments:
-        aws_access_key_id -- AWS access key provided to boto3.session.Session()
-        aws_secret_access_key -- AWS secret access key provided to
+        
+        :param aws_access_key_id: AWS access key provided to
             boto3.session.Session()
-        region_name -- The accessibility region provided to
+        :param aws_secret_access_key: AWS secret access key provided to
             boto3.session.Session()
-        instance_conf -- Dictionary defining {'ami': '', 'type': ''} for
+        :param region_name: The accessibility region provided to
+            boto3.session.Session()
+        :param instance_conf: Dictionary defining {'ami': '', 'type': ''} for
             instances (where 'ami' is the AMI ID for the instances and type is
             the instance type used); can also contain other parameters to
             boto3's EC2.ServiceResource.create_instances
-        manager_runtime -- String containing shell runtime command for the
+        :param manager_runtime: String containing shell runtime command for the
             manager instance
-        worker_runtime -- String containing shell runtime command for the
+        :param worker_runtime: String containing shell runtime command for the
             worker instance
-        key_path -- The path to the key used to create EC2 instances and to
+        :param key_path: The path to the key used to create EC2 instances and to
             connect to them using paramiko clients
-        ip_ref -- Whether to provide the user with the public IP or private IP
-        ver -- Designed to stamp Security Groups, Placement Groups, and keys
+        :param ip_ref: Whether to provide the user with the public IP or private
+            IP
+        :param ver: Designated to stamp Security Groups, Placement Groups, keys,
+            and all instances launched
         """
         self._kwargs = list(signature(RCluster).parameters.keys())
         self._kwargs.remove('purge')
@@ -60,7 +63,7 @@ class RCluster:
 
         if not key_path:
             self.key_name = ver
-            key_path = rcl.setData('pem')
+            key_path = rcl._setData('pem')
             kp = self.ec2.create_key_pair(KeyName=ver)
             with open(key_path, 'w') as out:
                 out.write(kp.key_material)
@@ -107,8 +110,7 @@ class RCluster:
     def writeConfig(self, fn):
         """Write out RCluster configuration data as JSON.
 
-        Keyword arguments:
-        fn -- The filename to be written, will overwrite previous file
+        :param fn: The filename to be written, will overwrite previous file
         """
         with open(fn, 'w') as out:
             json.dump(self._config, out, indent=2, sort_keys=True)
@@ -119,10 +121,9 @@ class RCluster:
         Prompts the user to input mandatory configuration values that are
         missing (i.e., AWS access credentials).
 
-        Keyword arguments:
-        fn -- The filename containing RCluster configuration data
-        kwargs -- Alternate or supplement RCluster configuration; will override
-            the content of fn
+        :param fn: The filename containing RCluster configuration data
+        :param kwargs: Alternate or supplement RCluster configuration; will
+            override the content of fn
         """
         with open(fn, 'r') as out:
             dic = json.load(out)
@@ -135,9 +136,8 @@ class RCluster:
     def createInstances(self, n_instances, **kwargs):
         """Create EC2 instances using RCluster's configuration.
 
-        Keyword arguments:
-        n_instances -- The number of instances to be created
-        kwargs -- arbitrary arguments to boto3 Session Resource
+        :param n_instances: The number of instances to be created
+        :param kwargs: arbitrary arguments to boto3 Session Resource
             ec2.create_instances; will supersede RCluster.instance_conf content
         """
         log.info('Creating %d instances.', n_instances)
@@ -163,10 +163,9 @@ class RCluster:
         Launch a manager instance and n_workers worker instances, automating the
         configuration of their shared networking.
 
-        Keyword arguments:
-        n_workers -- Number of worker instances to launch (default 1)
-        setup_pause -- Pause time to allow manager and workers to boot before
-            attempting configuration steps (default 60)
+        :param n_workers: Number of worker instances to launch (default 1)
+        :param setup_pause: Pause time to allow manager and workers to boot
+            before attempting configuration steps (default 60)
         """
         log.info('Creating cluster of', n_workers, 'workers.')
         instances = self.createInstances(n_workers + 1, **kwargs)
@@ -201,8 +200,7 @@ class RCluster:
         """
         Create SSH connection to boto3.EC2.Instance as paramiko.client.
 
-        Keyword arguments:
-        instance -- A boto3.EC2.Instance object
+        :param instance: A boto3.EC2.Instance object
         """
         host = getattr(instance, self.ip_ref)
         key_path = self.key_path
@@ -250,16 +248,15 @@ class RCluster:
         """
         Create an AMI, returning the AMI ID.
 
-        Keyword arguments:
-        base -- boto3.EC2.Instance object or nothing; optional to allow for
-            snapshotting
-        setup_fn -- The shell script used to configure the instance; optional
-            to allow for snapshotting
-        ver -- Name of AMI, defaults to self.ver
-        update_image -- Flag; whether to change the RCluster's instance_conf AMI
-            ID to that of the new image
-        terminate -- Flag; whether to terminate the instance used to build the
-            AMI (useful for debugging)
+        :param base: boto3.EC2.Instance object or nothing; optional to allow for
+            snapshotting.
+        :param setup_fn: The shell script used to configure the instance;
+            optional to allow for snapshotting.
+        :param ver: Name of AMI, defaults to self.ver.
+        :param update_image: Flag; whether to change the RCluster's
+            instance_conf AMI ID to that of the new image.
+        :param terminate: Flag; whether to terminate the instance used to build
+            the AMI (useful for debugging).
         """
         if not base:
             log.info('Creating base instance for AMI generation.')
@@ -302,9 +299,8 @@ def _ec2Purge(ec2_res, ver):
     * Deletes placement group named `ver`
     * Deletes security group named `ver`
 
-    Keyword arguments:
-    ec2_res: A boto3.EC2.ServiceResource
-    ver: The "version" to delete
+    :param ec2_res: A boto3.EC2.ServiceResource
+    :param ver: The "version" to delete
     """
     log.info('Purging %s configurations', ver)
     instances = ec2_res.instances.filter(

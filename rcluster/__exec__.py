@@ -19,7 +19,7 @@ def main():
     parser.add_argument('-t', '--type', type=str, nargs=1, default='m4.large',
                         help='The instance type to use.')
     parser.add_argument('-c', '--config', type=str, nargs=1,
-                        default=rcl.setData('json'),
+                        default=rcl._setData('json'),
                         help='The JSON RCluster configuration file.')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
@@ -55,22 +55,23 @@ def main():
 
 
 def config():
-    """Configure an RCluster
+    """
+    Configure RCluster and AWS EC2 account.
     Prompts user for credentials, builds an AMI with specified R packages
     installed, and saves out the configuration file with credentials to a hidden
     folder in the user's home directory.
     """
     import shutil
     parser.add_argument('-o', '--outfile', type=str, nargs=1,
-                        default=rcl.setData('json'),
+                        default=rcl._setData('json'),
                         help='The file in which to save the RCluster' +
                              'configuration data (stored in JSON format)')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
 
-    setup_cl = rcl.RCluster.fromConfig(rcl.getData('config.json'), purge=True)
+    setup_cl = rcl.RCluster.fromConfig(rcl._getData('config.json'), purge=True)
     setup_cl.writeConfig(args.outfile)
-    setup_script = shutil.copyfile(rcl.getData('ami.sh'), rcl.setData('sh'))
+    setup_script = shutil.copyfile(rcl._getData('ami.sh'), rcl._setData('sh'))
     # TODO: validate inputs
     pswd = input("Enter `cluster` user password: ")
     pkgs = input("Enter R packages to install (in format: `dplyr,plyr,etc`): ")
@@ -89,7 +90,7 @@ def terminate():
     configuration file.
     """
     parser.add_argument('-c', '--config', type=str, nargs=1,
-                        default=rcl.setData('json'),
+                        default=rcl._setData('json'),
                         help='The JSON RCluster configuration file.')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
@@ -103,7 +104,7 @@ def retrieveCluster():
     Retrieve the access IP address of the current master instance (if live).
     """
     parser.add_argument('-c', '--config', type=str, nargs=1,
-                        default=rcl.setData('json'),
+                        default=rcl._setData('json'),
                         help='The JSON RCluster configuration file.')
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)

@@ -1,3 +1,19 @@
+"""
+`rcluster` is a utility for configuring, launching, accessing, and managing R
+clusters on AWS.
+
+:class:`rcluster.RCluster` is the primary interface when used procedurally
+within a Python script.
+
+Command line tools include:
+
+* ``rcluster-config`` (:func:`rcluster.config`)
+* ``rcluster`` (:func:`rcluster.main`)
+* ``rcluster-open`` (:func:`rcluster.retrieveCluster`)
+* ``rcluster-terminate`` (:func:`rcluster.terminate`)
+
+"""
+
 import os
 import logging
 
@@ -15,14 +31,21 @@ os.makedirs(_OUTDIR, exist_ok=True)
 _ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
-def setData(ext):
-    """Return path to save to hidden .rcluster folder in user directory"""
+def _setData(ext):
+    """Return path to save a file to hidden .rcluster folder in user directory.
+
+    :param ext: The extension to give the output file. (All outputs are given
+        the same filename, based on the package version.)
+    """
     return os.path.join(_OUTDIR, __ver__ + '.' + ext)
 
 
-def getData(path):
-    """Inputs are sourced from the rcluster installation directory"""
-    return os.path.join(_ROOT, 'data', path)
+def _getData(fn):
+    """Inputs are sourced from the rcluster installation directory
+
+    :param fn: The data file name to retrieve from the `rcluster` installation.
+    """
+    return os.path.join(_ROOT, 'data', fn)
 
 
 from .rcluster import RCluster

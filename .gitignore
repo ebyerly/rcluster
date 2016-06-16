@@ -1,6 +1,6 @@
 .idea/*
 dist/*
 build/*
-docs/*
+docs/_*
 rcluster.egg-info/*
 *.pyc

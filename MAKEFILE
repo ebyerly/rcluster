@@ -1,0 +1,18 @@
+sphinx:
+	sphinx-apidoc -Pfe -o docs rcluster
+	sphinx-build -E -b html docs docs/_build
+
+built:
+	python setup.py sdist
+	python setup.py bdist_wheel
+
+git:
+	@git add --all
+	@git --no-pager diff HEAD
+	@echo "Please type commit message:";
+	@read commit_message;\
+	git commit -m "$$commit_message";
+	@git push origin master;
+
+publish: sphinx built git
+	twine upload dist/*
