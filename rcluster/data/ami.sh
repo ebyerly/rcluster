@@ -37,6 +37,10 @@ adduser cluster --gecos "cluster,,," --disabled-password
 # `cluster` user whenever a file is made in its home folder
 chmod -R g+swrx /home/cluster
 
+# Add `ubuntu` to cluster's user group, so SSH/SFTP connections can read and
+# write into the home folder.
+usermod -aG cluster ubuntu
+
 
 # ==========
 # Configure `cluster` user's .Rprofile to provide a function that automatically
@@ -77,15 +81,3 @@ chmod 644 /home/cluster/.ssh/authorized_keys
 apt-get -y install nfs-kernel-server
 echo "ALL: 10.10." >> /etc/hosts.allow
 echo "/home/cluster *(rw,sync,no_root_squash)" >> /etc/exports
-
-
-# ==========
-# Make directory to house shared data and code
-mkdir /shared
-chmod -R 777 /shared
-
-
-# ==========
-# Confirm appropriate ownership of home folder files
-chown -R cluster:cluster /home/cluster
-

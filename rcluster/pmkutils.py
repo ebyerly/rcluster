@@ -5,6 +5,7 @@ AWS servers using :py:class:`paramiko.client.SSHClient` and
 """
 
 import os
+import stat
 import paramiko
 from time import sleep
 
@@ -111,12 +112,11 @@ def pmkWalk(sftp_conn, dir):
     :param sftp_conn: :py:class:`paramiko.sftp_client.SFTPClient` object
     :param dir: Remote directory targeted
     """
-    from stat import S_ISDIR
     path = dir
     files = []
     folders = []
     for f in sftp_conn.listdir_attr(dir):
-        if S_ISDIR(f.st_mode):
+        if stat.S_ISDIR(f.st_mode):
             folders.append(f.filename)
         else:
             files.append(f.filename)
@@ -128,18 +128,23 @@ def pmkWalk(sftp_conn, dir):
 
 def pmkGet(client, source, target):
     """
-    Copy remote files to local target. Currently configured to copy the entire
-    content of directories.
+    Copy remote files to a local target directory.
+
+    If the source path is a directory, the directory will be copied recursively.
+    If the source path is a file, the single file will be copied.
 
     :param client: :py:class:`paramiko.client.SSHClient` object
-    :param source: The remote data source
-    :param target: The local data destination
+    :param source: The remote data source (directory or file)
+    :param target: A local folder
     """
     sftp_conn = client.open_sftp()
     sftp_conn.chdir(os.path.split(source)[0])
     parent = os.path.split(source)[1]
-    os.makedirs(target, exist_ok=True)
-    for path, folders, files in pmkWalk(sftp_conn, parent):
-        os.makedirs(os.path.join(target, path), exist_ok=True)
-        for file in files:
-            sftp_conn.get(_unixJoin(path, file), _unixJoin(target, path))
+    if stat.S_ISDIR(sftp_conn.lstat(parent).st_mode):
+        for path, folders, files in pmkWalk(sftp_conn, parent):
+            tdir = os.path.join(target, path)
+            os.makedirs(tdir, exist_ok=True)
+            for file in files:
+                sftp_conn.get(_unixJoin(path, file), os.path.join(tdir, file))
+    else:
+        sftp_conn.get(parent, os.path.join(target, parent))

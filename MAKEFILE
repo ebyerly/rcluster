@@ -17,7 +17,9 @@ git:
 test:
 	@py.test
 
-publish: test sphinx built git
+practice: test sphinx built git
+
+publish: practice
 	git push origin master
 	twine upload dist/*
 	python setup.py upload_sphinx
