@@ -14,7 +14,10 @@ git:
 	@read commit_message;\
 	git commit -m "$$commit_message"
 
-publish: sphinx built git
+test:
+	@py.test
+
+publish: test sphinx built git
 	git push origin master
 	twine upload dist/*
 	python setup.py upload_sphinx

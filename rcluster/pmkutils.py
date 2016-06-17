@@ -68,8 +68,12 @@ def cpuCount(client):
     return cpus
 
 
-def _unixJoin(left, right): return left + "/" + right
-def _unixPath(fn): fn.replace("\\", "/")
+def _unixJoin(left, right):
+    return left + "/" + right
+
+
+def _unixPath(fn):
+    return fn.replace("\\", "/")
 
 
 def pmkPut(client, source, target):
