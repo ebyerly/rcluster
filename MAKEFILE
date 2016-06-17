@@ -3,6 +3,7 @@ sphinx:
 	sphinx-build -E -b html docs docs/_build
 
 built:
+	rm -f dist/*
 	python setup.py sdist
 	python setup.py bdist_wheel
 
