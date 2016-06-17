@@ -1,3 +1,14 @@
+"""
+:mod:`rcluster.__exec__` provides command line utilities for using basic
+:class:`.rcluster.RCluster` features:
+
+* Populate a configuration file with your AWS access data
+* Setup AWS to run an R cluster
+* Launch an R cluster
+* Access a running R cluster
+* Terminate an R cluster
+"""
+
 import argparse
 import webbrowser
 import logging
@@ -102,6 +113,7 @@ def terminate():
 def retrieveCluster():
     """
     Retrieve the access IP address of the current master instance (if live).
+    Also opens a 
     """
     parser.add_argument('-c', '--config', type=str, nargs=1,
                         default=rcl._setData('json'),
@@ -116,4 +128,7 @@ def retrieveCluster():
         log.debug(ip)
         _openIp(ip)
 
-def _openIp(ip): webbrowser.open('http://' + ip + ":8787/")
+
+def _openIp(ip):
+    """Open a browser pointed to an IP address's 8787 port"""
+    webbrowser.open('http://' + ip + ":8787/")

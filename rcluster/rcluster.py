@@ -20,6 +20,10 @@ class RCluster:
     consistent key, the creation and tracking of manager and worker nodes
     comprising an R PSOCK cluster, and networking those manager and worker
     nodes to access within an RStudio Server session.
+    
+    .. automethod:: __repr__
+    .. automethod:: __setattr__
+    
     """
 
     def __init__(self, aws_access_key_id, aws_secret_access_key, region_name,
@@ -97,10 +101,13 @@ class RCluster:
             self._config)
 
     def __setattr__(self, key, value):
-        """__setattr__ special method redefined to keep an updated version of
-        the RCluster configuration options saved. Allows for easy exporting and
-        duplication of an RCluster configuration (see RCluster.fromConfig() and
-        RCluster.writeConfig()).
+        """
+        Redefined to keep an updated version of the :class:`~rcluster.RCluster`
+        configuration options saved. Allows for easy exporting, duplication,
+        and modification of configurations.
+        
+        See :meth:`~.rcluster.RCluster.fromConfig` and
+        :meth:`~.rcluster.RCluster.writeConfig`
         """
         if '_config' in self.__dict__ and key in self._kwargs:
             log.info('Setting configuration attribute %s', key)
@@ -293,6 +300,7 @@ def _ec2Purge(ec2_res, ver):
     """
     Utility to clear an AWS account of previous RCluster settings (useful for
     development). Removes resources associated with a provided version:
+    
     * Terminates instances with the tag key 'rcluster' and value `ver`
     * Deregisters AMI named `ver`
     * Deletes key-pair named `ver`

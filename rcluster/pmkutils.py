@@ -1,3 +1,9 @@
+"""
+:mod:`~rcluster.pmkutils` collects the functions used to interact with remote
+AWS servers using :py:class:`paramiko.client.SSHClient` and
+:py:class:`paramiko.sftp_client.SFTPClient` objects.
+"""
+
 import os
 import paramiko
 from time import sleep
@@ -10,7 +16,9 @@ def pmkConnect(host, key_path, username='ubuntu'):
     """
     Create SSH connection to host, retrying on failure.
 
-    :param instance: A boto3.EC2.Instance object
+    :param host: The address of the remote server
+    :param key_path: The location of the key pair file
+    :param username: The username to access on the remote server
     """
     log.debug('Connecting to %s@%s using key %s', username, host, key_path)
     client = paramiko.SSHClient()
@@ -33,7 +41,7 @@ def pmkConnect(host, key_path, username='ubuntu'):
 def pmkCmd(client, call):
     """Issue command over SSH, treat execution failure as program failure.
 
-    :param client: paramiko.Client class object
+    :param client: :py:class:`paramiko.client.SSHClient` class object
     :param call: String of shell command to be executed
     """
     log.debug('Issuing "%s"', call)
@@ -51,21 +59,25 @@ def pmkCmd(client, call):
 
 
 def cpuCount(client):
-    """Given a paramiko.Client object, return the remote's CPU count"""
+    """
+    Given a :py:class:`paramiko.client.SSHClient` object, return the remote's
+    CPU count
+    """
     cpus = pmkCmd(client, r'cat /proc/cpuinfo | grep processor | wc -l')
     cpus = int(cpus[0])  # original format: ['2', '\n']
     return cpus
 
 
 def _unixJoin(left, right): return left + "/" + right
+def _unixPath(fn): fn.replace("\\", "/")
 
 
 def pmkPut(client, source, target):
     """
-    Copy local files to remote target, copying directories recursively when
+    Copy local files to remote target. Directories are copied recursively when
     provided as the source. Will do nothing if source does not exist.
 
-    :param client: paramiko.Client object
+    :param client: :py:class:`paramiko.client.SSHClient` object
     :param source: The local data source
     :param target: The remote data destination
     """
@@ -73,9 +85,9 @@ def pmkPut(client, source, target):
     if os.path.isdir(source):
         for root, dirs, files in os.walk(source):
             for file in files:
-                orig = os.path.join(root, file)
+                orig = _unixJoin(root, file)
                 fn = os.path.relpath(orig, source)
-                dest = _unixJoin(target, fn)
+                dest = _unixPath(_unixJoin(target, fn))
                 try:
                     sftp_conn.mkdir(os.path.dirname(dest))
                 except OSError:
@@ -92,7 +104,7 @@ def pmkPut(client, source, target):
 def pmkWalk(sftp_conn, dir):
     """paramiko os.walk() equivalent.
 
-    :param sftp_conn: paramiko.sftp_client object
+    :param sftp_conn: :py:class:`paramiko.sftp_client.SFTPClient` object
     :param dir: Remote directory targeted
     """
     from stat import S_ISDIR
@@ -115,7 +127,7 @@ def pmkGet(client, source, target):
     Copy remote files to local target. Currently configured to copy the entire
     content of directories.
 
-    :param client: paramiko.Client object
+    :param client: :py:class:`paramiko.client.SSHClient` object
     :param source: The remote data source
     :param target: The local data destination
     """

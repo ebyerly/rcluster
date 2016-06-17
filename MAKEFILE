@@ -7,12 +7,13 @@ built:
 	python setup.py bdist_wheel
 
 git:
-	@git add --all
-	@git --no-pager diff HEAD
-	@echo "Please type commit message:";
+	git add --all
+	git --no-pager diff HEAD
+	@echo "Please type commit message:"
 	@read commit_message;\
-	git commit -m "$$commit_message";
-	@git push origin master;
+	git commit -m "$$commit_message"
 
 publish: sphinx built git
+	git push origin master
 	twine upload dist/*
+	python setup.py upload_sphinx
