@@ -9,10 +9,13 @@ built:
 
 git:
 	git add --all
-	if git --no-pager diff HEAD ; then \
-	echo "Please type commit message:" ; \
-	read commit_message ; \
-	git commit -m "$$commit_message"; fi ;
+	@if ! git --no-pager diff --cached --exit-code ; then \
+        echo "Please type commit message:" ; \
+        read commit_message ; \
+        git commit -m "$$commit_message" ; \
+	else \
+	    echo "No changes to local repository found." ; \
+	fi ;
 
 test:
 	@py.test
