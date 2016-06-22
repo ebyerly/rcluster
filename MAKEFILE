@@ -9,10 +9,10 @@ built:
 
 git:
 	git add --all
-	git --no-pager diff HEAD
-	@echo "Please type commit message:"
-	@read commit_message;\
-	git commit -m "$$commit_message"
+	if git --no-pager diff HEAD ; then \
+	echo "Please type commit message:" ; \
+	read commit_message ; \
+	git commit -m "$$commit_message"; fi ;
 
 test:
 	@py.test

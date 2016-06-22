@@ -8,9 +8,7 @@ import os
 import stat
 import paramiko
 from time import sleep
-
 from logging import getLogger
-log = getLogger(__name__)
 
 
 def pmkConnect(host, key_path, username='ubuntu'):
@@ -21,6 +19,7 @@ def pmkConnect(host, key_path, username='ubuntu'):
     :param key_path: The location of the key pair file
     :param username: The username to access on the remote server
     """
+    log = getLogger(__name__)
     log.debug('Connecting to %s@%s using key %s', username, host, key_path)
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy())
@@ -45,6 +44,7 @@ def pmkCmd(client, call):
     :param client: :py:class:`paramiko.client.SSHClient` class object
     :param call: String of shell command to be executed
     """
+    log = getLogger(__name__)
     log.debug('Issuing "%s"', call)
     stdin, stdout, stderr = client.exec_command(call)
     lines = []

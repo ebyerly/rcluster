@@ -3,13 +3,10 @@ import json
 from time import sleep
 from inspect import signature
 from pprint import PrettyPrinter
-
+from logging import getLogger
 from boto3 import session
 
 import rcluster as rcl
-
-from logging import getLogger
-log = getLogger(__name__)
 
 
 class RCluster:
@@ -56,6 +53,7 @@ class RCluster:
         self._kwargs = list(signature(RCluster).parameters.keys())
         self._kwargs.remove('purge')
         self._config = {}
+        self._log = getLogger(__name__)
         self.ses = session.Session(
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
@@ -110,7 +108,7 @@ class RCluster:
         :meth:`~.rcluster.RCluster.writeConfig`
         """
         if '_config' in self.__dict__ and key in self._kwargs:
-            log.info('Setting configuration attribute %s', key)
+            self._log.debug('Setting configuration attribute %s', key)
             self._config[key] = value
         super().__setattr__(key, value)
 
@@ -147,7 +145,7 @@ class RCluster:
         :param kwargs: arbitrary arguments to boto3 Session Resource
             ec2.create_instances; will supersede RCluster.instance_conf content
         """
-        log.info('Creating %d instances.', n_instances)
+        self._log.debug('Creating %d instances.', n_instances)
         conf = self.instance_conf.copy()
         conf.update(kwargs)
         instances = self.ec2.create_instances(
@@ -174,7 +172,7 @@ class RCluster:
         :param setup_pause: Pause time to allow manager and workers to boot
             before attempting configuration steps (default 60)
         """
-        log.info('Creating cluster of', n_workers, 'workers.')
+        self._log.debug('Creating cluster of', n_workers, 'workers.')
         instances = self.createInstances(n_workers + 1, **kwargs)
         manager = instances[0]
         manager.create_tags(DryRun=False,
@@ -186,21 +184,21 @@ class RCluster:
         try:  # TODO: thread
             self.hostfile = ''
             for worker in workers:
-                log.info('Configuring Worker %s', worker.instance_id)
+                self._log.debug('Configuring Worker %s', worker.instance_id)
                 client = self.connect(worker)
                 cpus = rcl.cpuCount(client)
                 self.hostfile += (worker.private_ip_address + '\n') * cpus
                 if self.worker_runtime:
                     rcl.pmkCmd(client,
                                self.worker_runtime.format(**self.__dict__))
-            log.info('Configuring manager %s', manager.instance_id)
+            self._log.debug('Configuring manager %s', manager.instance_id)
             client = self.connect(manager)
             cpus = rcl.cpuCount(client) - 1
             self.hostfile += (manager.private_ip_address + '\n') * cpus
             if self.manager_runtime:
                 rcl.pmkCmd(client, self.manager_runtime.format(**self.__dict__))
         except Exception as err:
-            log.error('Error during instance configuration: %s', err)
+            self._log.error('Error during instance configuration: %s', err)
             raise err
 
     def connect(self, instance):
@@ -228,7 +226,7 @@ class RCluster:
         if master:
             return getattr(master[0], self.ip_ref)
         else:
-            log.info("No active rcluster found")
+            self._log.info("No active rcluster found")
 
     def terminateInstances(self, ver=None):
         """
@@ -248,7 +246,7 @@ class RCluster:
         if instances:
             [instance.terminate() for instance in instances]
         else:
-            log.info("No instances terminated.")
+            self._log.debug("No instances terminated.")
 
     def createAmi(self, base=None, setup_fn=None, ver=None, update_image=True,
                   terminate=True, wait=True):
@@ -266,18 +264,18 @@ class RCluster:
             the AMI (useful for debugging).
         """
         if not base:
-            log.info('Creating base instance for AMI generation.')
+            self._log.debug('Creating base instance for AMI generation.')
             base = self.createInstances(1, InstanceType='m4.large')[0]
             sleep(20)
         if setup_fn:
             client = self.connect(base)
             sftp_conn = client.open_sftp()
             sftp_conn.put(setup_fn, 'setup.sh')
-            log.info('Setup script %s, running configuration.', setup_fn)
+            self._log.debug('Setup script %s, running configuration.', setup_fn)
             rcl.pmkCmd(client, 'sudo bash setup.sh')
         if not ver:
             ver = self.ver
-        log.info('Creating AMI %s', self.ver)
+        self._log.debug('Creating AMI %s', self.ver)
         image = base.create_image(
             DryRun=False,
             Name=ver,
@@ -287,7 +285,7 @@ class RCluster:
         base.wait_until_running()
         if wait:
             while 'available' not in self.ec2.Image(image.id).state:
-                log.debug('Waiting for AMI %s to become available', image.id)
+                self._log.debug('Waiting for AMI %s to be available', image.id)
                 sleep(20)
         if terminate:
             base.terminate()
@@ -310,6 +308,7 @@ def _ec2Purge(ec2_res, ver):
     :param ec2_res: A boto3.EC2.ServiceResource
     :param ver: The "version" to delete
     """
+    log = getLogger(__name__)
     log.info('Purging %s configurations', ver)
     instances = ec2_res.instances.filter(
         DryRun=False,
