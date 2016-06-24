@@ -69,82 +69,144 @@ def cpuCount(client):
     return cpus
 
 
-def _unixJoin(left, right):
-    return left + "/" + right
+def _unixPath(*args):
+    """Most handle UNIX pathing, not vice versa, enforce standard"""
+    return os.path.join(*args).replace('\\', '/')
 
 
-def _unixPath(fn):
-    return fn.replace("\\", "/")
-
-
-def pmkPut(client, source, target):
-    """
-    Copy local files to remote target. Directories are copied recursively when
-    provided as the source. Will do nothing if source does not exist.
-
-    :param client: :py:class:`paramiko.client.SSHClient` object
-    :param source: The local data source
-    :param target: The remote data destination
-    """
-    sftp_conn = client.open_sftp()
-    if os.path.isdir(source):
-        for root, dirs, files in os.walk(source):
-            for file in files:
-                orig = _unixJoin(root, file)
-                fn = os.path.relpath(orig, source)
-                dest = _unixPath(_unixJoin(target, fn))
-                try:
-                    sftp_conn.mkdir(os.path.dirname(dest))
-                except OSError:
-                    pass
-                sftp_conn.put(orig, dest)
-    elif os.path.isfile(source):
-        try:
-            sftp_conn.mkdir(os.path.split(target)[0])
-        except OSError:
-            pass
-        sftp_conn.put(source, target)
-
-
-def pmkWalk(sftp_conn, dir):
+def pmkWalk(sftp_conn, root):
     """paramiko os.walk() equivalent.
 
     :param sftp_conn: :py:class:`paramiko.sftp_client.SFTPClient` object
     :param dir: Remote directory targeted
     """
-    path = dir
     files = []
-    folders = []
-    for f in sftp_conn.listdir_attr(dir):
+    dirs = []
+    for f in sftp_conn.listdir_attr(root):
         if stat.S_ISDIR(f.st_mode):
-            folders.append(f.filename)
+            dirs.append(f.filename)
         else:
             files.append(f.filename)
-    yield path, folders, files
-    for folder in folders:
-        for x in pmkWalk(sftp_conn, _unixJoin(dir, folder)):
+    yield root, dirs, files
+    for folder in dirs:
+        for x in pmkWalk(sftp_conn, _unixPath(root, folder)):
             yield x
 
 
-def pmkGet(client, source, target):
+def _filesFromWalk(gen):
     """
-    Copy remote files to a local target directory.
+    Talk a generator yielding root, dirs, files (as from os.walk()) and return a
+    list of all files (with fully qualified paths).
 
-    If the source path is a directory, the directory will be copied recursively.
-    If the source path is a file, the single file will be copied.
+    :param gen: Generator yielding root, dirs, files (as from os.walk())
+    :type gen: generator
+    :return: 
+    """
+    all_files = []
+    for root, dirs, files in gen:
+        for fn in files:
+            all_files.append(_unixPath(root, fn))
+    return all_files
+
+
+def pmkPut(client, sources, target, threaded=True):
+    """
+    Copy local files to remote target. Directories are copied recursively when
+    provided as the source. Will do nothing if source does not exist.
 
     :param client: :py:class:`paramiko.client.SSHClient` object
-    :param source: The remote data source (directory or file)
-    :param target: A local folder
+    :param sources: The local data source
+    :param target: The remote data destination
     """
     sftp_conn = client.open_sftp()
-    sftp_conn.chdir(os.path.split(source)[0])
-    parent = os.path.split(source)[1]
-    if stat.S_ISDIR(sftp_conn.lstat(parent).st_mode):
-        for path, folders, files in pmkWalk(sftp_conn, parent):
-            tdir = os.path.join(target, path)
-            os.makedirs(tdir, exist_ok=True)
-            for file in files:
-                sftp_conn.get(_unixJoin(path, file), os.path.join(tdir, file))
+    send_files = []
+    if not type(sources) is list:
+        sources = [sources]
+    for source in sources:
+        if os.path.isfile(source):
+            send_files.append((source, target))
+        if os.path.isdir(source):
+            for source_fn in _filesFromWalk(os.walk(source)):
+                target_fn = _unixPath(target,
+                                      os.path.relpath(source_fn, source))
+                send_files.append((source_fn, target_fn))
+    pmkPutFiles(sftp_conn, send_files, threaded=threaded)
+
+
+def pmkPutFile(sftp_conn, source_fn, target_fn):
+    log = getLogger(__name__)
+    try:
+        sftp_conn.mkdir(os.path.dirname(target_fn))
+    except OSError:
+        pass
+    log.debug("Sending %s to %s", source_fn, target_fn)
+    sftp_conn.put(source_fn, target_fn)
+
+
+def pmkPutFiles(sftp_conn, send_files, threaded=True):
+    if threaded:
+        _thread_jobs(func=pmkPutFile, sftp_conn=sftp_conn, files=send_files)
     else:
-        sftp_conn.get(parent, os.path.join(target, parent))
+        for source_fn, target_fn in send_files:
+            pmkPutFile(sftp_conn, source_fn, target_fn)
+
+
+def pmkGet(client, sources, target, threaded=True):
+    """
+    Copy local files to remote target. Directories are copied recursively when
+    provided as the source. Will do nothing if source does not exist.
+
+    :param client: :py:class:`paramiko.client.SSHClient` object
+    :param sources: The local data source
+    :param target: The remote data destination
+    """
+    sftp_conn = client.open_sftp()
+    get_files = []
+    if not type(sources) is list:
+        sources = [sources]
+    for source in sources:
+        if stat.S_ISDIR(sftp_conn.lstat(source).st_mode):
+            for source_fn in _filesFromWalk(pmkWalk(sftp_conn, source)):
+                target_fn = os.path.join(target,
+                                         os.path.relpath(source_fn, source))
+                get_files.append((source_fn, target_fn))
+        if os.path.isfile(source):
+            get_files.append((source, target))
+    pmkGetFiles(sftp_conn, get_files, threaded=threaded)
+
+
+def pmkGetFile(sftp_conn, source_fn, target_fn):
+    log = getLogger(__name__)
+    os.makedirs(os.path.dirname(target_fn), exist_ok=True)
+    log.debug("Sending %s to %s", source_fn, target_fn)
+    sftp_conn.get(source_fn, target_fn)
+
+
+def pmkGetFiles(sftp_conn, get_files, threaded=True):
+    if threaded:
+        _thread_jobs(func=pmkGetFile, sftp_conn=sftp_conn, files=get_files)
+    else:
+        for source_fn, target_fn in get_files:
+            pmkGetFile(sftp_conn, source_fn, target_fn)
+
+
+def _thread_jobs(func, sftp_conn, files):
+    """
+    An internal utility for threading put/get actions.
+
+    :param files: A list containing two-tuples of (orig, dest)
+    :type files: list
+    :param func: Either sftp_conn.get or sftp_conn.put
+    :type func: function
+    :return:
+    """
+    from threading import Thread
+    jobs = []
+    for source_fn, target_fn in files:
+        job = Thread(target=func, kwargs={"sftp_conn": sftp_conn,
+                                          "source_fn": source_fn,
+                                          "target_fn": target_fn})
+        job.start()
+        jobs.append(job)
+    for job in jobs:
+        job.join()

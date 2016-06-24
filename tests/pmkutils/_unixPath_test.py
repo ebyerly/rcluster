@@ -18,6 +18,6 @@ def test_mix():
 
 
 def test_none():
-    with pytest.raises(AttributeError) as exc:
+    with pytest.raises(TypeError) as exc:
         _unixPath(None)
-    assert "'NoneType' object has no attribute 'replace'" in str(exc.value)
+    assert "join() argument must be str or bytes" in str(exc.value)
