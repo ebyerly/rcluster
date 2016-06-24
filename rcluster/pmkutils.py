@@ -3,9 +3,7 @@
 AWS servers using :py:class:`paramiko.client.SSHClient` and
 :py:class:`paramiko.sftp_client.SFTPClient` objects.
 """
-
 import os
-import stat
 import paramiko
 from time import sleep
 from logging import getLogger
@@ -80,6 +78,7 @@ def pmkWalk(sftp_conn, root):
     :param sftp_conn: :py:class:`paramiko.sftp_client.SFTPClient` object
     :param dir: Remote directory targeted
     """
+    import stat
     files = []
     dirs = []
     for f in sftp_conn.listdir_attr(root):
@@ -100,7 +99,7 @@ def _filesFromWalk(gen):
 
     :param gen: Generator yielding root, dirs, files (as from os.walk())
     :type gen: generator
-    :return: 
+    :return:
     """
     all_files = []
     for root, dirs, files in gen:
@@ -118,23 +117,34 @@ def pmkPut(client, sources, target, threaded=True):
     :param sources: The local data source
     :param target: The remote data destination
     """
-    sftp_conn = client.open_sftp()
     send_files = []
     if not type(sources) is list:
         sources = [sources]
     for source in sources:
         if os.path.isfile(source):
-            send_files.append((source, target))
+            target_fn = _unixPath(target, os.path.basename(source))
+            send_files.append((source, target_fn))
         if os.path.isdir(source):
             for source_fn in _filesFromWalk(os.walk(source)):
                 target_fn = _unixPath(target,
                                       os.path.relpath(source_fn, source))
                 send_files.append((source_fn, target_fn))
-    pmkPutFiles(sftp_conn, send_files, threaded=threaded)
+    pmkPutFiles(client=client, send_files=send_files, threaded=threaded)
 
 
-def pmkPutFile(sftp_conn, source_fn, target_fn):
+def pmkPutFile(client, source_fn, target_fn):
+    from paramiko.ssh_exception import ChannelException
+    from time import sleep
     log = getLogger(__name__)
+    try:
+        sftp_conn = client.open_sftp()
+    except ChannelException as e:
+        if 'Administratively prohibited' in str(e):
+            sleep(1)
+            pmkPutFile(client, source_fn, target_fn)
+            return
+        else:
+            raise e
     try:
         sftp_conn.mkdir(os.path.dirname(target_fn))
     except OSError:
@@ -143,12 +153,12 @@ def pmkPutFile(sftp_conn, source_fn, target_fn):
     sftp_conn.put(source_fn, target_fn)
 
 
-def pmkPutFiles(sftp_conn, send_files, threaded=True):
+def pmkPutFiles(client, send_files, threaded=True):
     if threaded:
-        _thread_jobs(func=pmkPutFile, sftp_conn=sftp_conn, files=send_files)
+        _thread_jobs(func=pmkPutFile, client=client, files=send_files)
     else:
         for source_fn, target_fn in send_files:
-            pmkPutFile(sftp_conn, source_fn, target_fn)
+            pmkPutFile(client, source_fn, target_fn)
 
 
 def pmkGet(client, sources, target, threaded=True):
@@ -160,6 +170,7 @@ def pmkGet(client, sources, target, threaded=True):
     :param sources: The local data source
     :param target: The remote data destination
     """
+    import stat
     sftp_conn = client.open_sftp()
     get_files = []
     if not type(sources) is list:
@@ -172,25 +183,36 @@ def pmkGet(client, sources, target, threaded=True):
                 get_files.append((source_fn, target_fn))
         if os.path.isfile(source):
             get_files.append((source, target))
-    pmkGetFiles(sftp_conn, get_files, threaded=threaded)
+    pmkGetFiles(client, get_files, threaded=threaded)
 
 
-def pmkGetFile(sftp_conn, source_fn, target_fn):
+def pmkGetFile(client, source_fn, target_fn):
+    from paramiko.ssh_exception import ChannelException
+    from time import sleep
     log = getLogger(__name__)
+    try:
+        sftp_conn = client.open_sftp()
+    except ChannelException as e:
+        if 'Administratively prohibited' in str(e):
+            sleep(1)
+            pmkGetFile(client, source_fn, target_fn)
+            return
+        else:
+            raise e
     os.makedirs(os.path.dirname(target_fn), exist_ok=True)
     log.debug("Sending %s to %s", source_fn, target_fn)
     sftp_conn.get(source_fn, target_fn)
 
 
-def pmkGetFiles(sftp_conn, get_files, threaded=True):
+def pmkGetFiles(client, get_files, threaded=True):
     if threaded:
-        _thread_jobs(func=pmkGetFile, sftp_conn=sftp_conn, files=get_files)
+        _thread_jobs(func=pmkGetFile, client=client, files=get_files)
     else:
         for source_fn, target_fn in get_files:
-            pmkGetFile(sftp_conn, source_fn, target_fn)
+            pmkGetFile(client, source_fn, target_fn)
 
 
-def _thread_jobs(func, sftp_conn, files):
+def _thread_jobs(func, client, files):
     """
     An internal utility for threading put/get actions.
 
@@ -203,7 +225,7 @@ def _thread_jobs(func, sftp_conn, files):
     from threading import Thread
     jobs = []
     for source_fn, target_fn in files:
-        job = Thread(target=func, kwargs={"sftp_conn": sftp_conn,
+        job = Thread(target=func, kwargs={"client": client,
                                           "source_fn": source_fn,
                                           "target_fn": target_fn})
         job.start()
