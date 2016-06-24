@@ -211,7 +211,7 @@ class RCluster:
         key_path = self.key_path
         return rcl.pmkConnect(host, key_path)
 
-    def retrieveAccessIp(self):
+    def retrieveMasterIp(self):
         """
         Identify the master's access IP address (if a master has been defined).
         """
@@ -292,6 +292,30 @@ class RCluster:
         if update_image:
             self.instance_conf['ImageId'] = image.id
         return image.id
+
+    def putData(self, instance, sources, target, threaded=True):
+        """
+
+        :param instance:
+        :param sources:
+        :param target:
+        :param threaded:
+        :return:
+        """
+        ssh_client = self.connect(instance)
+        rcl.pmkPut(ssh_client, sources, target, threaded=threaded)
+
+    def getData(self, instance, sources, target, threaded=True):
+        """
+
+        :param instance:
+        :param sources:
+        :param target:
+        :param threaded:
+        :return:
+        """
+        ssh_client = self.connect(instance)
+        rcl.pmkGet(ssh_client, sources, target, threaded=threaded)
 
 
 def _ec2Purge(ec2_res, ver):

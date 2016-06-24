@@ -42,7 +42,7 @@ def main():
         log.err('Run `rcluster-config`, first, to generate your own config',
                 'file with the minimum necessary data to start an R cluster.')
         raise err
-    ip = cluster.retrieveAccessIp()
+    ip = cluster.retrieveMasterIp()
     if ip:
         log.info("Active rcluster found.\n",
                  "Run `rcluster-terminate` to remove the previous cluster.\n"
@@ -123,7 +123,7 @@ def retrieveCluster():
     log = logging.getLogger()
 
     cluster = rcl.RCluster.fromConfig(args.config)
-    ip = cluster.retrieveAccessIp()
+    ip = cluster.retrieveMasterIp()
     if ip:
         log.debug(ip)
         _openIp(ip)
