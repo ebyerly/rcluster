@@ -173,9 +173,10 @@ class RCluster:
         :param setup_pause: Pause time to allow manager and workers to boot
             before attempting configuration steps (default 60)
         """
-        if self.rcluster:
-            self._log.debug('Active cluster found, returned.')
-            return self.rcluster
+        if 'rcluster' in self.__dict__:
+            if self.rcluster:
+                self._log.debug('Active cluster found, returned.')
+                return self.rcluster
         self._log.debug('Creating cluster of', n_workers, 'workers.')
         instances = self.create_instances(n_workers + 1, **kwargs)
         sleep(setup_pause)
