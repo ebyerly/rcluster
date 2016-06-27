@@ -3,6 +3,7 @@ import json
 from time import sleep
 from inspect import signature
 from pprint import PrettyPrinter
+from threading import Thread, Lock
 from logging import getLogger
 from boto3 import session
 
@@ -155,15 +156,15 @@ class RCluster:
             KeyName=self.key_name,
             **conf
         )
-        sleep(5)
         instances[0].wait_until_running()
+        sleep(5)
         for instance in instances:
             instance.create_tags(DryRun=False,
                                  Tags=[{'Key': 'rcluster', 'Value': self.ver}])
         ids = [instance.id for instance in instances]
         return list(self.ec2.instances.filter(InstanceIds=ids))
 
-    def createCluster(self, n_workers=1, setup_pause=60, **kwargs):
+    def createCluster(self, n_workers=0, setup_pause=40, **kwargs):
         """Initialize the cluster.
         Launch a manager instance and n_workers worker instances, automating the
         configuration of their shared networking.
@@ -172,35 +173,51 @@ class RCluster:
         :param setup_pause: Pause time to allow manager and workers to boot
             before attempting configuration steps (default 60)
         """
+        if self.rcluster:
+            self._log.debug('Active cluster found, returned.')
+            return self.rcluster
         self._log.debug('Creating cluster of', n_workers, 'workers.')
         instances = self.createInstances(n_workers + 1, **kwargs)
-        manager = instances[0]
-        manager.create_tags(DryRun=False,
-                            Tags=[{'Key': self.ver, 'Value': 'master'}])
-        workers = instances[1:]
         sleep(setup_pause)
-        self.manager_private = getattr(manager, 'private_ip_address')
-        self.access_ip = getattr(manager, self.ip_ref)
-        try:  # TODO: thread
+        try:
+            manager = instances[0]
+            manager.create_tags(DryRun=False,
+                                Tags=[{'Key': self.ver, 'Value': 'master'}])
+            workers = instances[1:]
+            self.manager_private = getattr(manager, 'private_ip_address')
             self.hostfile = ''
+            hostfile_lock = Lock()
+            worker_threads = []
             for worker in workers:
-                self._log.debug('Configuring Worker %s', worker.instance_id)
-                client = self.connect(worker)
-                cpus = rcl.cpuCount(client)
-                self.hostfile += (worker.private_ip_address + '\n') * cpus
-                if self.worker_runtime:
-                    rcl.pmkCmd(client,
-                               self.worker_runtime.format(**self.__dict__))
-            self._log.debug('Configuring manager %s', manager.instance_id)
-            client = self.connect(manager)
-            cpus = rcl.cpuCount(client) - 1
-            self.hostfile += (manager.private_ip_address + '\n') * cpus
-            if self.manager_runtime:
-                rcl.pmkCmd(client, self.manager_runtime.format(**self.__dict__))
+                worker_thread = Thread(target=self._configureInstance,
+                                       kwargs={
+                                           "instance": worker,
+                                           "runtime": self.worker_runtime,
+                                           "hostfile_lock": hostfile_lock
+                                       })
+                worker_thread.start()
+                worker_threads.append(worker_thread)
+            for worker_thread in worker_threads:
+                worker_thread.join()
+            self._configureInstance(manager, self.manager_runtime,
+                                    hostfile_lock)
         except Exception as err:
+            [instance.terminate() for instance in instances]
             self._log.error('Error during instance configuration: %s', err)
             raise err
+        self.manager_ssh = self.connect(manager)
+        self.rcluster = instances
+        return self.rcluster
 
+    def _configureInstance(self, instance, runtime, hostfile_lock):
+        self._log.debug('Configuring instance %s', instance.instance_id)
+        client = self.connect(instance)
+        cpus = rcl.cpuCount(client)
+        with hostfile_lock:
+            self.hostfile += (instance.private_ip_address + '\n') * cpus
+        if runtime:
+            rcl.pmkCmd(client, runtime.format(**self.__dict__))
+    
     def connect(self, instance):
         """
         Create SSH connection to boto3.EC2.Instance as paramiko.client.
@@ -211,10 +228,12 @@ class RCluster:
         key_path = self.key_path
         return rcl.pmkConnect(host, key_path)
 
-    def retrieveMasterIp(self):
+    def retrieveMaster(self):
         """
-        Identify the master's access IP address (if a master has been defined).
+        Identify the master  (if a master has been defined) and return it.
         """
+        if self.rcluster:
+            return self.rcluster[0]
         master = list(self.ec2.instances.filter(
             DryRun=False,
             Filters=[
@@ -224,25 +243,37 @@ class RCluster:
                  'Values': ['running', 'pending']}
             ]))
         if master:
-            return getattr(master[0], self.ip_ref)
+            return master
         else:
             self._log.info("No active rcluster found")
 
-    def terminateInstances(self, ver=None):
+    def retrieveMasterIp(self):
         """
-        Terminate EC2.Instance objects created by the current configuration
-        file.
+        Identify the master's access IP address (if a master has been defined).
         """
+        master = self.retrieveMaster()
+        if master:
+            return getattr(master[0], self.ip_ref)
+
+    def retrieveInstances(self, ver=None):
         if not ver:
             ver = self.ver
         instances = self.ec2.instances.filter(
-            DryRun=False,
-            Filters=[
-                {'Name': 'tag-key', 'Values': ['rcluster']},
-                {'Name': 'tag-value', 'Values': [ver]},
-                {'Name': 'instance-state-name',
-                 'Values': ['running', 'pending']}
-            ])
+        DryRun = False,
+        Filters = [
+            {'Name': 'tag-key', 'Values': ['rcluster']},
+            {'Name': 'tag-value', 'Values': [ver]},
+            {'Name': 'instance-state-name',
+             'Values': ['running', 'pending']}
+        ])
+        return instances
+
+    def terminateInstances(self, ver=None):
+        """
+        Terminate all EC2.Instance objects created by the current configuration
+        file.
+        """
+        instances = self.retrieveInstances(ver)
         if instances:
             [instance.terminate() for instance in instances]
         else:
@@ -293,7 +324,7 @@ class RCluster:
             self.instance_conf['ImageId'] = image.id
         return image.id
 
-    def putData(self, instance, sources, target, threaded=True):
+    def putData(self, sources, target=None, client=None, threaded=True):
         """
 
         :param instance:
@@ -302,10 +333,13 @@ class RCluster:
         :param threaded:
         :return:
         """
-        ssh_client = self.connect(instance)
-        rcl.pmkPut(ssh_client, sources, target, threaded=threaded)
+        if not target:
+            target = "/home/cluster"
+        if not client:
+            client = self.manager_ssh
+        rcl.pmkPut(client, sources, target, threaded=threaded)
 
-    def getData(self, instance, sources, target, threaded=True):
+    def getData(self, target, sources=None, client=None, threaded=True):
         """
 
         :param instance:
@@ -314,8 +348,22 @@ class RCluster:
         :param threaded:
         :return:
         """
-        ssh_client = self.connect(instance)
-        rcl.pmkGet(ssh_client, sources, target, threaded=threaded)
+        if not sources:
+            sources = "/home/cluster"
+        if not client:
+            client = self.manager_ssh
+        rcl.pmkGet(client, sources, target, threaded=threaded)
+
+    def issueCmd(self, call, client):
+        """
+        
+        :param instance:
+        :param call:
+        :return:
+        """
+        if not client:
+            client = self.manager_ssh
+        rcl.pmkCmd(client, call)
 
 
 def _ec2Purge(ec2_res, ver):
