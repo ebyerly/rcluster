@@ -218,7 +218,7 @@ class RCluster:
             self.hostfile += (instance.private_ip_address + '\n') * cpus
         if runtime:
             rcl.pmk_cmd(client, runtime.format(**self.__dict__))
-    
+
     def connect(self, instance):
         """
         Create SSH connection to boto3.EC2.Instance as paramiko.client.
@@ -233,8 +233,9 @@ class RCluster:
         """
         Identify the master  (if a master has been defined) and return it.
         """
-        if self.rcluster:
-            return self.rcluster[0]
+        if 'rcluster' in self.__dict__:
+            if self.rcluster:
+                return self.rcluster[0]
         master = list(self.ec2.instances.filter(
             DryRun=False,
             Filters=[
@@ -260,14 +261,14 @@ class RCluster:
         if not ver:
             ver = self.ver
         instances = self.ec2.instances.filter(
-        DryRun = False,
-        Filters = [
-            {'Name': 'tag-key', 'Values': ['rcluster']},
-            {'Name': 'tag-value', 'Values': [ver]},
-            {'Name': 'instance-state-name',
-             'Values': ['running', 'pending']}
-        ])
-        return instances
+            DryRun=False,
+            Filters=[
+                {'Name': 'tag-key', 'Values': ['rcluster']},
+                {'Name': 'tag-value', 'Values': [ver]},
+                {'Name': 'instance-state-name',
+                 'Values': ['running', 'pending']}
+            ])
+        return list(instances)
 
     def terminate_instances(self, ver=None):
         """
@@ -355,7 +356,7 @@ class RCluster:
             client = self.manager_ssh
         rcl.pmk_get(client, sources, target, threaded=threaded)
 
-    def issue_cmd(self, call, client):
+    def issue_cmd(self, call, client=None):
         """
         
         :param instance:
