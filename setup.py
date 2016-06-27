@@ -39,7 +39,7 @@ setup(
         'console_scripts': [
             'rcluster-config=rcluster.__exec__:config',
             'rcluster=rcluster.__exec__:main',
-            'rcluster-open=rcluster.__exec__:retrieveCluster',
+            'rcluster-open=rcluster.__exec__:retrieve_cluster',
             'rcluster-terminate=rcluster.__exec__:terminate'
         ]
     }

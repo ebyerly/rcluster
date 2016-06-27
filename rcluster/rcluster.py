@@ -62,11 +62,11 @@ class RCluster:
         )
         self.ec2 = self.ses.resource('ec2')
         if purge:
-            _ec2Purge(self.ec2, ver)
+            _ec2_purge(self.ec2, ver)
 
         if not key_path:
             self.key_name = ver
-            key_path = rcl._setData('pem')
+            key_path = rcl._set_data('pem')
             kp = self.ec2.create_key_pair(KeyName=ver)
             with open(key_path, 'w') as out:
                 out.write(kp.key_material)
@@ -113,7 +113,7 @@ class RCluster:
             self._config[key] = value
         super().__setattr__(key, value)
 
-    def writeConfig(self, fn):
+    def write_config(self, fn):
         """Write out RCluster configuration data as JSON.
 
         :param fn: The filename to be written, will overwrite previous file
@@ -121,7 +121,7 @@ class RCluster:
         with open(fn, 'w') as out:
             json.dump(self._config, out, indent=2, sort_keys=True)
 
-    def fromConfig(fn, **kwargs):
+    def from_config(fn, **kwargs):
         """
         Use RCluster JSON configuration to create RCluster object.
         Prompts the user to input mandatory configuration values that are
@@ -139,7 +139,7 @@ class RCluster:
                 dic[key] = input(key + ': ')
         return RCluster(**dic)
 
-    def createInstances(self, n_instances, **kwargs):
+    def create_instances(self, n_instances, **kwargs):
         """Create EC2 instances using RCluster's configuration.
 
         :param n_instances: The number of instances to be created
@@ -164,7 +164,7 @@ class RCluster:
         ids = [instance.id for instance in instances]
         return list(self.ec2.instances.filter(InstanceIds=ids))
 
-    def createCluster(self, n_workers=0, setup_pause=40, **kwargs):
+    def create_cluster(self, n_workers=0, setup_pause=40, **kwargs):
         """Initialize the cluster.
         Launch a manager instance and n_workers worker instances, automating the
         configuration of their shared networking.
@@ -177,7 +177,7 @@ class RCluster:
             self._log.debug('Active cluster found, returned.')
             return self.rcluster
         self._log.debug('Creating cluster of', n_workers, 'workers.')
-        instances = self.createInstances(n_workers + 1, **kwargs)
+        instances = self.create_instances(n_workers + 1, **kwargs)
         sleep(setup_pause)
         try:
             manager = instances[0]
@@ -189,7 +189,7 @@ class RCluster:
             hostfile_lock = Lock()
             worker_threads = []
             for worker in workers:
-                worker_thread = Thread(target=self._configureInstance,
+                worker_thread = Thread(target=self._configure_instance,
                                        kwargs={
                                            "instance": worker,
                                            "runtime": self.worker_runtime,
@@ -199,8 +199,8 @@ class RCluster:
                 worker_threads.append(worker_thread)
             for worker_thread in worker_threads:
                 worker_thread.join()
-            self._configureInstance(manager, self.manager_runtime,
-                                    hostfile_lock)
+            self._configure_instance(manager, self.manager_runtime,
+                                     hostfile_lock)
         except Exception as err:
             [instance.terminate() for instance in instances]
             self._log.error('Error during instance configuration: %s', err)
@@ -209,14 +209,14 @@ class RCluster:
         self.rcluster = instances
         return self.rcluster
 
-    def _configureInstance(self, instance, runtime, hostfile_lock):
+    def _configure_instance(self, instance, runtime, hostfile_lock):
         self._log.debug('Configuring instance %s', instance.instance_id)
         client = self.connect(instance)
-        cpus = rcl.cpuCount(client)
+        cpus = rcl.cpu_count(client)
         with hostfile_lock:
             self.hostfile += (instance.private_ip_address + '\n') * cpus
         if runtime:
-            rcl.pmkCmd(client, runtime.format(**self.__dict__))
+            rcl.pmk_cmd(client, runtime.format(**self.__dict__))
     
     def connect(self, instance):
         """
@@ -226,9 +226,9 @@ class RCluster:
         """
         host = getattr(instance, self.ip_ref)
         key_path = self.key_path
-        return rcl.pmkConnect(host, key_path)
+        return rcl.pmk_connect(host, key_path)
 
-    def retrieveMaster(self):
+    def get_manager(self):
         """
         Identify the master  (if a master has been defined) and return it.
         """
@@ -247,15 +247,15 @@ class RCluster:
         else:
             self._log.info("No active rcluster found")
 
-    def retrieveMasterIp(self):
+    def get_manager_ip(self):
         """
         Identify the master's access IP address (if a master has been defined).
         """
-        master = self.retrieveMaster()
+        master = self.get_manager()
         if master:
             return getattr(master[0], self.ip_ref)
 
-    def retrieveInstances(self, ver=None):
+    def get_instances(self, ver=None):
         if not ver:
             ver = self.ver
         instances = self.ec2.instances.filter(
@@ -268,19 +268,19 @@ class RCluster:
         ])
         return instances
 
-    def terminateInstances(self, ver=None):
+    def terminate_instances(self, ver=None):
         """
         Terminate all EC2.Instance objects created by the current configuration
         file.
         """
-        instances = self.retrieveInstances(ver)
+        instances = self.get_instances(ver)
         if instances:
             [instance.terminate() for instance in instances]
         else:
             self._log.debug("No instances terminated.")
 
-    def createAmi(self, base=None, setup_fn=None, ver=None, update_image=True,
-                  terminate=True, wait=True):
+    def create_ami(self, base=None, setup_fn=None, ver=None, update_image=True,
+                   terminate=True, wait=True):
         """
         Create an AMI, returning the AMI ID.
 
@@ -296,14 +296,14 @@ class RCluster:
         """
         if not base:
             self._log.debug('Creating base instance for AMI generation.')
-            base = self.createInstances(1, InstanceType='m4.large')[0]
+            base = self.create_instances(1, InstanceType='m4.large')[0]
             sleep(20)
         if setup_fn:
             client = self.connect(base)
             sftp_conn = client.open_sftp()
             sftp_conn.put(setup_fn, 'setup.sh')
             self._log.debug('Setup script %s, running configuration.', setup_fn)
-            rcl.pmkCmd(client, 'sudo bash setup.sh')
+            rcl.pmk_cmd(client, 'sudo bash setup.sh')
         if not ver:
             ver = self.ver
         self._log.debug('Creating AMI %s', self.ver)
@@ -324,7 +324,7 @@ class RCluster:
             self.instance_conf['ImageId'] = image.id
         return image.id
 
-    def putData(self, sources, target=None, client=None, threaded=True):
+    def put_data(self, sources, target=None, client=None, threaded=True):
         """
 
         :param instance:
@@ -337,9 +337,9 @@ class RCluster:
             target = "/home/cluster"
         if not client:
             client = self.manager_ssh
-        rcl.pmkPut(client, sources, target, threaded=threaded)
+        rcl.pmk_put(client, sources, target, threaded=threaded)
 
-    def getData(self, target, sources=None, client=None, threaded=True):
+    def get_data(self, target, sources=None, client=None, threaded=True):
         """
 
         :param instance:
@@ -352,9 +352,9 @@ class RCluster:
             sources = "/home/cluster"
         if not client:
             client = self.manager_ssh
-        rcl.pmkGet(client, sources, target, threaded=threaded)
+        rcl.pmk_get(client, sources, target, threaded=threaded)
 
-    def issueCmd(self, call, client):
+    def issue_cmd(self, call, client):
         """
         
         :param instance:
@@ -363,10 +363,10 @@ class RCluster:
         """
         if not client:
             client = self.manager_ssh
-        rcl.pmkCmd(client, call)
+        rcl.pmk_cmd(client, call)
 
 
-def _ec2Purge(ec2_res, ver):
+def _ec2_purge(ec2_res, ver):
     """
     Utility to clear an AWS account of previous RCluster settings (useful for
     development). Removes resources associated with a provided version:
