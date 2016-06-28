@@ -127,7 +127,7 @@ def pmk_walk(sftp_conn, root):
             yield x
 
 
-def _pmk_mover(func, client, file_tuples, threaded=True):
+def _pmk_mover(func, client, file_tuples, threaded=True, thread_cap=10):
     """
 
     :param func:
@@ -138,20 +138,23 @@ def _pmk_mover(func, client, file_tuples, threaded=True):
     """
     if threaded:
         jobs = []
-        for source_fn, target_fn in file_tuples:
-            job = Thread(target=func, kwargs={"client": client,
-                                              "source_fn": source_fn,
-                                              "target_fn": target_fn})
-            job.start()
-            jobs.append(job)
-        for job in jobs:
-            job.join()
+        while len(file_tuples) > 0:
+            if len(jobs) < thread_cap:
+                source_fn, target_fn = file_tuples.pop()
+                job = Thread(target=func, kwargs={"client": client,
+                                                  "source_fn": source_fn,
+                                                  "target_fn": target_fn})
+                job.start()
+                jobs.append(job)
+            else:
+                while len(jobs) >= thread_cap:
+                    jobs = [job for job in jobs if job.is_alive()]
     else:
         for source_fn, target_fn in file_tuples:
             func(client, source_fn, target_fn)
 
 
-def pmk_put(client, sources, target, threaded=True):
+def pmk_put(client, sources, target, threaded=True, thread_cap=10):
     """
     Copy local files to remote target. Directories are copied recursively when
     provided as the source. Will do nothing if source does not exist.
@@ -174,7 +177,7 @@ def pmk_put(client, sources, target, threaded=True):
                                        os.path.relpath(source_fn, source))
                 send_files.append((source_fn, target_fn))
     _pmk_mover(pmk_put_file, client=client, file_tuples=send_files,
-               threaded=threaded)
+               threaded=threaded, thread_cap=thread_cap)
 
 
 def pmk_put_file(client, source_fn, target_fn):
@@ -195,7 +198,7 @@ def pmk_put_file(client, source_fn, target_fn):
     sftp_conn.put(source_fn, target_fn)
 
 
-def pmk_get(client, sources, target, threaded=True):
+def pmk_get(client, sources, target, threaded=True, thread_cap=10):
     """
     Copy local files to remote target. Directories are copied recursively when
     provided as the source. Will do nothing if source does not exist.
@@ -218,7 +221,7 @@ def pmk_get(client, sources, target, threaded=True):
         if os.path.isfile(source):
             get_files.append((source, target))
     _pmk_mover(pmk_get_file, client=client, file_tuples=get_files,
-               threaded=threaded)
+               threaded=threaded, thread_cap=thread_cap)
 
 
 def pmk_get_file(client, source_fn, target_fn):
