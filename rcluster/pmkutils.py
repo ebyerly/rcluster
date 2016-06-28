@@ -196,6 +196,7 @@ def pmk_put_file(client, source_fn, target_fn):
         pass
     log.debug("Sending %s to %s", source_fn, target_fn)
     sftp_conn.put(source_fn, target_fn)
+    sftp_conn.close()
 
 
 def pmk_get(client, sources, target, threaded=True, thread_cap=10):
@@ -237,3 +238,4 @@ def pmk_get_file(client, source_fn, target_fn):
     os.makedirs(os.path.dirname(target_fn), exist_ok=True)
     log.debug("Sending %s to %s", source_fn, target_fn)
     sftp_conn.get(source_fn, target_fn)
+    sftp_conn.close()
