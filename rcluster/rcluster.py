@@ -183,7 +183,7 @@ class RCluster:
         try:
             manager = instances[0]
             manager.create_tags(DryRun=False,
-                                Tags=[{'Key': self.ver, 'Value': 'master'}])
+                                Tags=[{'Key': self.ver, 'Value': 'manager'}])
             workers = instances[1:]
             self.manager_private = getattr(manager, 'private_ip_address')
             self.hostfile = ''
@@ -231,31 +231,33 @@ class RCluster:
 
     def get_manager(self):
         """
-        Identify the master  (if a master has been defined) and return it.
+        Identify the manager  (if a manager has been defined) and return it.
+        
+        :return: list of identified ver/manager
         """
         if 'rcluster' in self.__dict__:
             if self.rcluster:
                 return self.rcluster[0]
-        master = list(self.ec2.instances.filter(
+        manager = list(self.ec2.instances.filter(
             DryRun=False,
             Filters=[
                 {'Name': 'tag-key', 'Values': [self.ver]},
-                {'Name': 'tag-value', 'Values': ['master']},
+                {'Name': 'tag-value', 'Values': ['manager']},
                 {'Name': 'instance-state-name',
                  'Values': ['running', 'pending']}
             ]))
-        if master:
-            return master
+        if manager:
+            return manager
         else:
             self._log.info("No active rcluster found")
 
     def get_manager_ip(self):
         """
-        Identify the master's access IP address (if a master has been defined).
+        Identify the manager's access IP address (if a manager has been defined).
         """
-        master = self.get_manager()
-        if master:
-            return getattr(master[0], self.ip_ref)
+        manager = self.get_manager()
+        if manager:
+            return getattr(manager[0], self.ip_ref)
 
     def get_instances(self, ver=None):
         if not ver:

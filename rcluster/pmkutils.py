@@ -18,7 +18,7 @@ def _unix_path(*args):
 
 def _walk_files(gen):
     """
-    Talk a generator yielding root, dirs, files (as from os.walk()) and return a
+    Take a generator yielding root, dirs, files (as from os.walk()) and return a
     list of all files (with fully qualified paths).
 
     :param gen: Generator yielding root, dirs, files (as from os.walk())
@@ -101,7 +101,7 @@ def pmk_cmd(client, call):
 def cpu_count(client):
     """
     Given a :py:class:`paramiko.client.SSHClient` object, return the remote's
-    CPU count
+    CPU count. (
     """
     cpus = pmk_cmd(client, r'cat /proc/cpuinfo | grep processor | wc -l')
     cpus = int(cpus[0])  # original format: ['2', '\n']

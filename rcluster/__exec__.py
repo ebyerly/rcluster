@@ -46,12 +46,12 @@ def main():
     if ip:
         log.info("Active rcluster found.\n",
                  "Run `rcluster-terminate` to remove the previous cluster.\n"
-                 "Returning current master instance.\n")
+                 "Returning current manager instance.\n")
     else:
         cluster.create_cluster(args.workers[0], InstanceType=args.type)
         ip = cluster.access_ip
     _open_ip(ip)
-    cl_data = ('Master IP Address:', ip)
+    cl_data = ('Manager IP Address:', ip)
     log.info(cl_data)
     term = ''
     while term not in 'yn':
@@ -112,8 +112,8 @@ def terminate():
 
 def retrieve_cluster():
     """
-    Retrieve the access IP address of the current master instance (if live).
-    Also opens a 
+    Retrieve the access IP address of the current manager instance (if live).
+    Also opens a browser to the manager's RStudio Server.
     """
     parser.add_argument('-c', '--config', type=str, nargs=1,
                         default=rcl._set_data('json'),
