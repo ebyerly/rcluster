@@ -46,13 +46,17 @@ usermod -aG cluster ubuntu
 # Configure `cluster` user's .Rprofile to provide a function that automatically
 # loads the provided hostfile and creates a PSOCK cluster
 echo 'defaultCluster <- function(hostfile = "/home/cluster/hostfile") {
-  hosts <- read.delim(hostfile, "\n", header = FALSE,
-                      stringsAsFactors = FALSE)[,1]
-  master_ip <- gsub("-", ".",
-                    gsub("ip-", "", system("hostname", intern = TRUE)))
-  parallel::makePSOCKcluster(hosts, rscript = "/usr/bin/Rscript",
-                             user = "cluster", port = 42808,
-                             master = master_ip)
+  if (file.exists(hostfile)) {
+    hosts <- read.delim(hostfile, "\n", header = FALSE,
+                        stringsAsFactors = FALSE)[,1]
+    master_ip <- gsub("-", ".",
+                      gsub("ip-", "", system("hostname", intern = TRUE)))
+    parallel::makePSOCKcluster(hosts, rscript = "/usr/bin/Rscript",
+                               user = "cluster", port = 42808,
+                               master = master_ip)
+  } else {
+    parallel::makePSOCKcluster(parallel::detectCores())
+  }
 }
 ' >> /home/cluster/.Rprofile
 

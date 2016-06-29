@@ -3,6 +3,7 @@
 AWS servers using :py:class:`paramiko.client.SSHClient` and
 :py:class:`paramiko.sftp_client.SFTPClient` objects.
 """
+
 import os
 import stat
 import paramiko
@@ -12,18 +13,25 @@ from logging import getLogger
 
 
 def _unix_path(*args):
-    """Most handle UNIX pathing, not vice versa, enforce standard"""
+    """Most handle UNIX pathing, not vice versa, enforce standard
+
+    :param args: Arbitrary list of directories/files to connect
+    :type args: string
+    :return:
+    :rtype: string
+    """
     return os.path.join(*args).replace('\\', '/')
 
 
 def _walk_files(gen):
     """
     Take a generator yielding root, dirs, files (as from os.walk()) and return a
-    list of all files (with fully qualified paths).
+    list of all files.
 
     :param gen: Generator yielding root, dirs, files (as from os.walk())
     :type gen: generator
-    :return:
+    :return: Fully qualified file paths
+    :rtype: list of strings
     """
     all_files = []
     for root, dirs, files in gen:
@@ -35,10 +43,10 @@ def _walk_files(gen):
 def _open_sftp(client):
     """
     Open and return. If connection denied due to too many active connections,
-    try again recursively until successful.
+    try again until successful.
 
-    :param client:
-    :return:
+    :param client: Connected :py:class:`paramiko.client.SSHClient` object
+    :return: A connected :py:class:`paramiko.sftp_client.SFTPClient`
     """
     try:
         return client.open_sftp()
@@ -50,6 +58,35 @@ def _open_sftp(client):
             raise e
 
 
+def _pmk_mover(func, client, file_tuples, threaded, thread_cap):
+    """
+
+    :param func: :py:class:`paramiko.sftp_client.SFTPClient.put`
+    :param client:
+    :param file_tuples:
+    :param threaded:
+    :return: None
+    """
+    if threaded:
+        jobs = []
+        while len(file_tuples) > 0:
+            if len(jobs) < thread_cap:
+                source_fn, target_fn = file_tuples.pop()
+                job = Thread(target=func, kwargs={"client": client,
+                                                  "source_fn": source_fn,
+                                                  "target_fn": target_fn})
+                job.start()
+                jobs.append(job)
+            else:
+                while len(jobs) >= thread_cap:
+                    jobs = [job for job in jobs if job.is_alive()]
+        for job in jobs:
+            job.join()
+    else:
+        for source_fn, target_fn in file_tuples:
+            func(client, source_fn, target_fn)
+
+
 def pmk_connect(host, key_path, username='ubuntu'):
     """
     Create SSH connection to host, retrying on failure.
@@ -57,6 +94,7 @@ def pmk_connect(host, key_path, username='ubuntu'):
     :param host: The address of the remote server
     :param key_path: The location of the key pair file
     :param username: The username to access on the remote server
+    :return: Connected :py:class:`paramiko.client.SSHClient` class object
     """
     log = getLogger(__name__)
     log.debug('Connecting to %s@%s using key %s', username, host, key_path)
@@ -82,6 +120,8 @@ def pmk_cmd(client, call):
 
     :param client: :py:class:`paramiko.client.SSHClient` class object
     :param call: String of shell command to be executed
+    :return: Values returned to stdout
+    :rtype: list of strings
     """
     log = getLogger(__name__)
     log.debug('Issuing "%s"', call)
@@ -101,10 +141,14 @@ def pmk_cmd(client, call):
 def cpu_count(client):
     """
     Given a :py:class:`paramiko.client.SSHClient` object, return the remote's
-    CPU count. (
+    CPU count.
+
+    :param client: :py:class:`paramiko.client.SSHClient` class object
+    :return: The number of physical CPUs on the remote instance
+    :rtype: integer
     """
     cpus = pmk_cmd(client, r'cat /proc/cpuinfo | grep processor | wc -l')
-    cpus = int(cpus[0])  # original format: ['2', '\n']
+    cpus = int(''.join([char for char in cpus if not char == r"\n"]))
     return cpus
 
 
@@ -113,6 +157,8 @@ def pmk_walk(sftp_conn, root):
 
     :param sftp_conn: :py:class:`paramiko.sftp_client.SFTPClient` object
     :param root: Remote directory targeted
+    :return: A generator of root, dirs, files
+    :rtype: generator
     """
     files = []
     dirs = []
@@ -127,33 +173,6 @@ def pmk_walk(sftp_conn, root):
             yield x
 
 
-def _pmk_mover(func, client, file_tuples, threaded=True, thread_cap=10):
-    """
-
-    :param func:
-    :param client:
-    :param file_tuples:
-    :param threaded:
-    :return:
-    """
-    if threaded:
-        jobs = []
-        while len(file_tuples) > 0:
-            if len(jobs) < thread_cap:
-                source_fn, target_fn = file_tuples.pop()
-                job = Thread(target=func, kwargs={"client": client,
-                                                  "source_fn": source_fn,
-                                                  "target_fn": target_fn})
-                job.start()
-                jobs.append(job)
-            else:
-                while len(jobs) >= thread_cap:
-                    jobs = [job for job in jobs if job.is_alive()]
-    else:
-        for source_fn, target_fn in file_tuples:
-            func(client, source_fn, target_fn)
-
-
 def pmk_put(client, sources, target, threaded=True, thread_cap=10):
     """
     Copy local files to remote target. Directories are copied recursively when
@@ -163,6 +182,9 @@ def pmk_put(client, sources, target, threaded=True, thread_cap=10):
     :param sources: The local data source
     :param target: The remote data destination
     :param threaded:
+    :param thread_cap: The maximum numbers of SFTP transfers to attempt; default
+        is 10 (as SSH's `MaxSessions` default)
+    :return: None
     """
     send_files = []
     if not type(sources) is list:
@@ -186,7 +208,7 @@ def pmk_put_file(client, source_fn, target_fn):
     :param client:
     :param source_fn:
     :param target_fn:
-    :return:
+    :return: None
     """
     log = getLogger(__name__)
     sftp_conn = _open_sftp(client)
@@ -208,6 +230,9 @@ def pmk_get(client, sources, target, threaded=True, thread_cap=10):
     :param sources: The local data source
     :param target: The remote data destination
     :param threaded:
+    :param thread_cap: The maximum numbers of SFTP transfers to attempt; default
+        is 10 (as SSH's `MaxSessions` default)
+    :return: None
     """
     sftp_conn = client.open_sftp()
     get_files = []
@@ -231,7 +256,7 @@ def pmk_get_file(client, source_fn, target_fn):
     :param client:
     :param source_fn:
     :param target_fn:
-    :return:
+    :return: None
     """
     log = getLogger(__name__)
     sftp_conn = _open_sftp(client)

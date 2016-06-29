@@ -177,7 +177,7 @@ class RCluster:
             if self.rcluster:
                 self._log.debug('Active cluster found, returned.')
                 return self.rcluster
-        self._log.debug('Creating cluster of', n_workers, 'workers.')
+        self._log.debug('Creating cluster of %d workers.', n_workers)
         instances = self.create_instances(n_workers + 1, **kwargs)
         sleep(setup_pause)
         try:
