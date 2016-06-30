@@ -28,18 +28,9 @@ gdebi --non-interactive rstudio-server-0.99.896-amd64.deb
 
 
 # ==========
-# `cluster` user
-
 # Add the `cluster` user
+
 adduser cluster --gecos "cluster,,," --disabled-password
-
-# Set the cluster user's home folder to automatically set permissions for the
-# `cluster` user whenever a file is made in its home folder
-chmod -R g+swrx /home/cluster
-
-# Add `ubuntu` to cluster's user group, so SSH/SFTP connections can read and
-# write into the home folder.
-usermod -aG cluster ubuntu
 
 
 # ==========
@@ -49,8 +40,8 @@ echo 'defaultCluster <- function(hostfile = "/home/cluster/hostfile") {
   if (file.exists(hostfile)) {
     hosts <- read.delim(hostfile, "\n", header = FALSE,
                         stringsAsFactors = FALSE)[,1]
-    master_ip <- gsub("-", ".",
-                      gsub("ip-", "", system("hostname", intern = TRUE)))
+    master_ip <- gsub("-", ".", gsub("ip-", "",
+                                     system("hostname", intern = TRUE)))
     parallel::makePSOCKcluster(hosts, rscript = "/usr/bin/Rscript",
                                user = "cluster", port = 42808,
                                master = master_ip)
@@ -63,25 +54,37 @@ echo 'defaultCluster <- function(hostfile = "/home/cluster/hostfile") {
 
 # ==========
 # SSH
-# Note, as the /home/cluster folder is shared across master and workers, they
+
+# Note, as the /home/cluster folder is shared across manager and workers, they
 # will all share the same /home/cluster/.ssh folder
 mkdir /home/cluster/.ssh
 ssh-keygen -t rsa -N "" -f /home/cluster/.ssh/id_rsa
-cat /home/cluster/.ssh/id_rsa.pub >> /home/cluster/.ssh/authorized_keys
 
-# Allow for first-login without confirming host
-# (TODO: RStudio confirms host key checking?)
+# Allow localhost logins
+cat /home/cluster/.ssh/id_rsa.pub > /home/cluster/.ssh/authorized_keys
+
+# Allow for first-login without confirming host (TODO: RStudio confirms host
+# key checking?)
 echo 'Host *
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null' >> /home/cluster/.ssh/config
 
-# Confirm SSH files have minimized access
-chmod 700 -R /home/cluster/.ssh
-chmod 644 /home/cluster/.ssh/authorized_keys
-
+# Confirm appropriate file ownership and permissions
+chown cluster:cluster -R /home/cluster
+chmod 0755 -R /home/cluster
+chmod 0600 /home/cluster/.ssh/authorized_keys
 
 # ==========
-# Install NFS, mount `cluster` user home folder for sharing
+# NFS configuration
+
+# Install NFS
 apt-get -y install nfs-kernel-server
-echo "ALL: 10.10." >> /etc/hosts.allow
-echo "/home/cluster *(rw,sync,no_root_squash)" >> /etc/exports
+
+# Create an "open" folder for sharing data, writing data by SFTP
+mkdir /shared
+chmod 777 /shared
+
+# Share folders across local connections
+echo "ALL: 172. 192." >> /etc/hosts.allow
+echo "/shared *(rw,sync,no_root_squash)
+/home/cluster *(rw,sync,no_root_squash)" >> /etc/exports

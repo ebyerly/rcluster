@@ -109,9 +109,8 @@ def _pmk_get(client, file_queue):
     """
 
     :param client:
-    :param source_fn:
-    :param target_fn:
-    :return: None
+    :param file_queue:
+    :return:
     """
     log = getLogger(__name__)
     sftp_conn = _open_sftp(client)
@@ -266,5 +265,3 @@ def pmk_get(client, sources, target, threaded=True, thread_cap=10):
             get_files.append((source, target))
     _pmk_mover(_pmk_get, client=client, file_tuples=get_files,
                threaded=threaded, thread_cap=thread_cap)
-
-

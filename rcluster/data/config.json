@@ -9,5 +9,5 @@
   "manager_runtime":
     "echo \"{hostfile}\" | sudo tee --append /home/cluster/hostfile",
   "worker_runtime":
-    "sudo mount -t nfs {manager_private}:/home/cluster /home/cluster"
+    "sudo mount -t nfs {manager_private}:/home/cluster /home/cluster;sudo mount -t nfs {manager_private}:/shared /shared"
 }

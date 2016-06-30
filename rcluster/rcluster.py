@@ -332,14 +332,14 @@ class RCluster:
     def put_data(self, sources, target=None, client=None, threaded=True):
         """
 
-        :param instance:
         :param sources:
         :param target:
+        :param client:
         :param threaded:
         :return:
         """
         if not target:
-            target = "/home/cluster"
+            target = "/shared"
         if not client:
             client = self.manager_ssh
         rcl.pmk_put(client, sources, target, threaded=threaded)
@@ -347,23 +347,23 @@ class RCluster:
     def get_data(self, target, sources=None, client=None, threaded=True):
         """
 
-        :param instance:
-        :param sources:
         :param target:
+        :param sources:
+        :param client:
         :param threaded:
         :return:
         """
         if not sources:
-            sources = "/home/cluster"
+            sources = "/shared"
         if not client:
             client = self.manager_ssh
         rcl.pmk_get(client, sources, target, threaded=threaded)
 
     def issue_cmd(self, call, client=None):
         """
-        
-        :param instance:
+
         :param call:
+        :param client:
         :return:
         """
         if not client:
