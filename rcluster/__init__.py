@@ -17,7 +17,7 @@ import os
 import logging
 
 __title__ = 'rcluster'
-__ver__ = '0.2.18'
+__ver__ = '0.2.19'
 
 # Add logging (defaults to null, but can be picked up by any logger)
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -50,4 +50,4 @@ def _get_data(fn):
 
 from .rcluster import RCluster
 from .pmkutils import pmk_connect, pmk_cmd, cpu_count, pmk_walk, \
-    pmk_put, pmk_put_file, pmk_get, pmk_get_file
+    pmk_put, _pmk_put, pmk_get, _pmk_get

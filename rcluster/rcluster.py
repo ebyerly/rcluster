@@ -233,7 +233,7 @@ class RCluster:
         """
         Identify the manager  (if a manager has been defined) and return it.
         
-        :return: list of identified ver/manager
+        :return: list of identified ver/manager or None
         """
         if 'rcluster' in self.__dict__:
             if self.rcluster:
@@ -250,6 +250,7 @@ class RCluster:
             return manager
         else:
             self._log.info("No active rcluster found")
+            return None
 
     def get_manager_ip(self):
         """

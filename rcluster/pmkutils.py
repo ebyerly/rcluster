@@ -8,6 +8,7 @@ import os
 import stat
 import paramiko
 from time import sleep
+from queue import Queue
 from threading import Thread
 from logging import getLogger
 
@@ -67,24 +68,60 @@ def _pmk_mover(func, client, file_tuples, threaded, thread_cap):
     :param threaded:
     :return: None
     """
+    file_queue = Queue()
+    for tup in file_tuples:
+        file_queue.put(tup)
     if threaded:
         jobs = []
-        while len(file_tuples) > 0:
-            if len(jobs) < thread_cap:
-                source_fn, target_fn = file_tuples.pop()
-                job = Thread(target=func, kwargs={"client": client,
-                                                  "source_fn": source_fn,
-                                                  "target_fn": target_fn})
-                job.start()
-                jobs.append(job)
-            else:
-                while len(jobs) >= thread_cap:
-                    jobs = [job for job in jobs if job.is_alive()]
+        for job in range(min(len(file_tuples), thread_cap)):
+            job = Thread(target=func,
+                         kwargs={"client": client, "file_queue": file_queue})
+            job.start()
+            jobs.append(job)
         for job in jobs:
             job.join()
     else:
-        for source_fn, target_fn in file_tuples:
-            func(client, source_fn, target_fn)
+        func(client, file_queue)
+
+
+def _pmk_put(client, file_queue):
+    """
+
+    :param client:
+    :param file_queue:
+    :return:
+    """
+    log = getLogger(__name__)
+    sftp_conn = _open_sftp(client)
+    while not file_queue.empty():
+        source_fn, target_fn = file_queue.get()
+        try:
+            sftp_conn.mkdir(os.path.dirname(target_fn))
+        except OSError:
+            pass
+        log.debug("Sending %s to %s", source_fn, target_fn)
+        sftp_conn.put(source_fn, target_fn)
+        file_queue.task_done()
+    sftp_conn.close()
+
+
+def _pmk_get(client, file_queue):
+    """
+
+    :param client:
+    :param source_fn:
+    :param target_fn:
+    :return: None
+    """
+    log = getLogger(__name__)
+    sftp_conn = _open_sftp(client)
+    while not file_queue.empty():
+        source_fn, target_fn = file_queue.get()
+        os.makedirs(os.path.dirname(target_fn), exist_ok=True)
+        log.debug("Sending %s to %s", source_fn, target_fn)
+        sftp_conn.get(source_fn, target_fn)
+        file_queue.task_done()
+    sftp_conn.close()
 
 
 def pmk_connect(host, key_path, username='ubuntu'):
@@ -198,27 +235,8 @@ def pmk_put(client, sources, target, threaded=True, thread_cap=10):
                 target_fn = _unix_path(target,
                                        os.path.relpath(source_fn, source))
                 send_files.append((source_fn, target_fn))
-    _pmk_mover(pmk_put_file, client=client, file_tuples=send_files,
+    _pmk_mover(_pmk_put, client=client, file_tuples=send_files,
                threaded=threaded, thread_cap=thread_cap)
-
-
-def pmk_put_file(client, source_fn, target_fn):
-    """
-
-    :param client:
-    :param source_fn:
-    :param target_fn:
-    :return: None
-    """
-    log = getLogger(__name__)
-    sftp_conn = _open_sftp(client)
-    try:
-        sftp_conn.mkdir(os.path.dirname(target_fn))
-    except OSError:
-        pass
-    log.debug("Sending %s to %s", source_fn, target_fn)
-    sftp_conn.put(source_fn, target_fn)
-    sftp_conn.close()
 
 
 def pmk_get(client, sources, target, threaded=True, thread_cap=10):
@@ -246,21 +264,7 @@ def pmk_get(client, sources, target, threaded=True, thread_cap=10):
                 get_files.append((source_fn, target_fn))
         if os.path.isfile(source):
             get_files.append((source, target))
-    _pmk_mover(pmk_get_file, client=client, file_tuples=get_files,
+    _pmk_mover(_pmk_get, client=client, file_tuples=get_files,
                threaded=threaded, thread_cap=thread_cap)
 
 
-def pmk_get_file(client, source_fn, target_fn):
-    """
-
-    :param client:
-    :param source_fn:
-    :param target_fn:
-    :return: None
-    """
-    log = getLogger(__name__)
-    sftp_conn = _open_sftp(client)
-    os.makedirs(os.path.dirname(target_fn), exist_ok=True)
-    log.debug("Sending %s to %s", source_fn, target_fn)
-    sftp_conn.get(source_fn, target_fn)
-    sftp_conn.close()
