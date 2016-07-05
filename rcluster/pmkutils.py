@@ -151,20 +151,22 @@ def pmk_connect(host, key_path, username='ubuntu'):
         raise err
 
 
-def pmk_cmd(client, call):
+def pmk_cmd(client, call, **kwargs):
     """Issue command over SSH, treat execution failure as program failure.
 
     :param client: :py:class:`paramiko.client.SSHClient` class object
     :param call: String of shell command to be executed
+    :param kwargs: Additional keyword parameters to exec_command()
     :return: Values returned to stdout
     :rtype: list of strings
     """
     log = getLogger(__name__)
     log.debug('Issuing "%s"', call)
-    stdin, stdout, stderr = client.exec_command(call)
+    stdin, stdout, stderr = client.exec_command(call, **kwargs)
     lines = []
     for line in iter(lambda: stdout.readline(2048), ""):
-        log.debug(line.encode('utf-8'))
+        line = line.encode('utf-8')
+        log.debug(line)
         lines += line
     exit_status = stdout.channel.recv_exit_status()
     if exit_status:

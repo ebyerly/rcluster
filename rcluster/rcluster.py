@@ -359,7 +359,7 @@ class RCluster:
             client = self.manager_ssh
         rcl.pmk_get(client, sources, target, threaded=threaded)
 
-    def issue_cmd(self, call, client=None):
+    def issue_cmd(self, call, client=None, **kwargs):
         """
 
         :param call:
@@ -368,7 +368,7 @@ class RCluster:
         """
         if not client:
             client = self.manager_ssh
-        rcl.pmk_cmd(client, call)
+        return rcl.pmk_cmd(client, call, **kwargs)
 
 
 def _ec2_purge(ec2_res, ver):
