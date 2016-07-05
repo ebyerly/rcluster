@@ -165,8 +165,7 @@ def pmk_cmd(client, call, **kwargs):
     stdin, stdout, stderr = client.exec_command(call, **kwargs)
     lines = []
     for line in iter(lambda: stdout.readline(2048), ""):
-        line = line.encode('utf-8')
-        log.debug(line)
+        log.debug(line.encode('utf-8'))
         lines += line
     exit_status = stdout.channel.recv_exit_status()
     if exit_status:
