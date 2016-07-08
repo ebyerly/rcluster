@@ -206,7 +206,6 @@ class RCluster:
             [instance.terminate() for instance in instances]
             self._log.error('Error during instance configuration: %s', err)
             raise err
-        self.manager_ssh = self.connect(manager)
         self.rcluster = instances
         return self.rcluster
 
@@ -219,15 +218,17 @@ class RCluster:
         if runtime:
             rcl.pmk_cmd(client, runtime.format(**self.__dict__))
 
-    def connect(self, instance):
+    def connect(self, instance=None, **kwargs):
         """
         Create SSH connection to boto3.EC2.Instance as paramiko.client.
 
         :param instance: A boto3.EC2.Instance object
         """
+        if not instance:
+            instance = self.get_manager()
         host = getattr(instance, self.ip_ref)
         key_path = self.key_path
-        return rcl.pmk_connect(host, key_path)
+        return rcl.pmk_connect(host, key_path, **kwargs)
 
     def get_manager(self):
         """
@@ -247,7 +248,10 @@ class RCluster:
                  'Values': ['running', 'pending']}
             ]))
         if manager:
-            return manager
+            cnt = len(manager)
+            if cnt > 1:
+                self._log.debug("%d managers found, returning the first.", cnt)
+            return manager[0]
         else:
             self._log.info("No active rcluster found")
             return None
@@ -341,7 +345,7 @@ class RCluster:
         if not target:
             target = "/shared"
         if not client:
-            client = self.manager_ssh
+            client = self.connect()
         rcl.pmk_put(client, sources, target, threaded=threaded)
 
     def get_data(self, target, sources=None, client=None, threaded=True):
@@ -356,7 +360,7 @@ class RCluster:
         if not sources:
             sources = "/shared"
         if not client:
-            client = self.manager_ssh
+            client = self.connect()
         rcl.pmk_get(client, sources, target, threaded=threaded)
 
     def issue_cmd(self, call, client=None, **kwargs):
@@ -367,7 +371,7 @@ class RCluster:
         :return:
         """
         if not client:
-            client = self.manager_ssh
+            client = self.connect()
         return rcl.pmk_cmd(client, call, **kwargs)
 
 

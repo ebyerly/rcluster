@@ -123,13 +123,30 @@ def _pmk_get(client, file_queue):
     sftp_conn.close()
 
 
-def pmk_connect(host, key_path, username='ubuntu'):
+def _pmk_keepalive(client, interval):
+    def keepalive(client):
+        while True:
+            sleep(interval)
+            try:
+                client.exec_command("echo 'beep'")
+            except paramiko.ssh_exception.SSHException as e:
+                if "SSH session not active" in e.args:
+                    return
+                else:
+                    raise e
+
+    Thread(target=keepalive, args=(client,)).start()
+
+
+def pmk_connect(host, key_path, username='ubuntu', keepalive=False,
+                interval=30):
     """
     Create SSH connection to host, retrying on failure.
 
     :param host: The address of the remote server
     :param key_path: The location of the key pair file
     :param username: The username to access on the remote server
+    :param keepalive:
     :return: Connected :py:class:`paramiko.client.SSHClient` class object
     """
     log = getLogger(__name__)
@@ -140,6 +157,8 @@ def pmk_connect(host, key_path, username='ubuntu'):
         log.debug('Connecting to host %s', host)
         k = paramiko.RSAKey.from_private_key_file(key_path)
         client.connect(hostname=host, username=username, pkey=k)
+        if keepalive:
+            _pmk_keepalive(client, interval)
         return client
     except (TimeoutError, ConnectionRefusedError,
             paramiko.ssh_exception.NoValidConnectionsError) as err:
