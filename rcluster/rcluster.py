@@ -153,6 +153,7 @@ class RCluster:
         self._log.debug('Creating %d instances.', n_instances)
         conf = self.instance_conf.copy()
         conf.update(kwargs)
+        conf = {key: value for key, value in conf.items() if value}
         instances = self.ec2.create_instances(
             DryRun=False,
             MinCount=n_instances,
