@@ -124,6 +124,12 @@ def _pmk_get(client, file_queue):
 
 
 def _pmk_keepalive(client, interval):
+    """
+
+    :param client:
+    :param interval:
+    :return:
+    """
     def keepalive(client):
         while True:
             sleep(interval)

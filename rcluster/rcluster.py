@@ -47,9 +47,11 @@ class RCluster:
         :param key_path: The path to the key used to create EC2 instances and to
             connect to them using paramiko clients
         :param ip_ref: Whether to provide the user with the public IP or private
-            IP
+            IP (useful when configured behind a VPC)
         :param ver: Designated to stamp Security Groups, Placement Groups, keys,
             and all instances launched
+        :param purge: Whether to purge previous objects registered to the
+            provided version stamp.
         """
         self._kwargs = list(signature(RCluster).parameters.keys())
         self._kwargs.remove('purge')
@@ -130,6 +132,7 @@ class RCluster:
         :param fn: The filename containing RCluster configuration data
         :param kwargs: Alternate or supplement RCluster configuration; will
             override the content of fn
+        :returns: An :py:class:`~RCluster` object
         """
         with open(fn, 'r') as out:
             dic = json.load(out)
@@ -145,6 +148,7 @@ class RCluster:
         :param n_instances: The number of instances to be created
         :param kwargs: arbitrary arguments to boto3 Session Resource
             ec2.create_instances; will supersede RCluster.instance_conf content
+        :returns: list; each object is a boto3.EC2.Instance object
         """
         self._log.debug('Creating %d instances.', n_instances)
         conf = self.instance_conf.copy()
@@ -159,8 +163,10 @@ class RCluster:
         instances[0].wait_until_running()
         sleep(5)
         for instance in instances:
-            instance.create_tags(DryRun=False,
-                                 Tags=[{'Key': 'rcluster', 'Value': self.ver}])
+            instance.create_tags(
+                DryRun=False,
+                Tags=[{'Key': 'rcluster', 'Value': self.ver}]
+            )
         ids = [instance.id for instance in instances]
         return list(self.ec2.instances.filter(InstanceIds=ids))
 
@@ -172,6 +178,8 @@ class RCluster:
         :param n_workers: Number of worker instances to launch (default 1)
         :param setup_pause: Pause time to allow manager and workers to boot
             before attempting configuration steps (default 60)
+        :param kwargs: arbitrary arguments to boto3 Session Resource
+            ec2.create_instances; will supersede RCluster.instance_conf content
         """
         if 'rcluster' in self.__dict__:
             if self.rcluster:
@@ -305,7 +313,11 @@ class RCluster:
         """
         if not base:
             self._log.debug('Creating base instance for AMI generation.')
-            base = self.create_instances(1, InstanceType='m4.large')[0]
+            base = self.create_instances(
+                1,
+                InstanceType='m4.large',
+                Placement=None
+            )[0]
             sleep(20)
         if setup_fn:
             client = self.connect(base)
