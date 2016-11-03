@@ -153,6 +153,7 @@ def pmk_connect(host, key_path, username='ubuntu', keepalive=False,
     :param key_path: The location of the key pair file
     :param username: The username to access on the remote server
     :param keepalive:
+    :param interval:
     :return: Connected :py:class:`paramiko.client.SSHClient` class object
     """
     log = getLogger(__name__)
@@ -282,12 +283,17 @@ def pmk_get(client, sources, target, threaded=True, thread_cap=10):
     if not type(sources) is list:
         sources = [sources]
     for source in sources:
-        if stat.S_ISDIR(sftp_conn.lstat(source).st_mode):
-            for source_fn in _walk_files(pmk_walk(sftp_conn, source)):
-                target_fn = os.path.join(target,
-                                         os.path.relpath(source_fn, source))
-                get_files.append((source_fn, target_fn))
-        if os.path.isfile(source):
-            get_files.append((source, target))
+        try:
+            stat_mode = sftp_conn.lstat(source).st_mode
+            if stat.S_ISREG(stat_mode):
+                get_files.append((source, target))
+            if stat.S_ISDIR(stat_mode):
+                for source_fn in _walk_files(pmk_walk(sftp_conn, source)):
+                    target_fn = os.path.join(target,
+                                             os.path.relpath(source_fn, source))
+                    get_files.append((source_fn, target_fn))
+        except IOError as e:
+            if not 'No such file' in str(e):
+                raise e
     _pmk_mover(_pmk_get, client=client, file_tuples=get_files,
                threaded=threaded, thread_cap=thread_cap)
