@@ -79,7 +79,8 @@ def _pmk_mover(func, client, file_tuples, threaded, thread_cap):
             job.start()
             jobs.append(job)
         for job in jobs:
-            job.join()
+            while job.is_alive():
+                sleep(1)
     else:
         func(client, file_queue)
 

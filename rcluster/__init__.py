@@ -17,7 +17,7 @@ import os
 import logging
 
 __title__ = 'rcluster'
-__ver__ = '0.2.26'
+__ver__ = '0.2.27'
 
 # Add logging (defaults to null, but can be picked up by any logger)
 logging.getLogger(__name__).addHandler(logging.NullHandler())
